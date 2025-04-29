@@ -140,18 +140,18 @@ class NetworkScanner:
         final_id_col_name = id_key  # Store the intended ID column name
 
         # --- TEMPORARY MODIFICATION ---
-        max_batches_to_process = 30  # <<< SET YOUR DESIRED NUMBER OF BATCHES HERE
+        #max_batches_to_process = 30  # <<< SET YOUR DESIRED NUMBER OF BATCHES HERE
         # --- END TEMPORARY MODIFICATION ---
 
         for batch in iterator:
             batch_num += 1
 
             # --- TEMPORARY MODIFICATION ---
-            if batch_num > max_batches_to_process:
-                print(
-                    f"\nStopping early after processing {max_batches_to_process} batches."
-                )
-                break
+            #if batch_num > max_batches_to_process:
+            #    print(
+            #        f"\nStopping early after processing {max_batches_to_process} batches."
+            #    )
+            #    break
             # --- END TEMPORARY MODIFICATION ---
 
             images = None

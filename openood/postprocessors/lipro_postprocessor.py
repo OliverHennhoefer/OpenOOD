@@ -1,16 +1,10 @@
-import itertools
-
 import polars
 import torch
 import torch.nn as nn
 
-from typing import Any
-
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from openood.postprocessors import BasePostprocessor
-from openood.utils import comm
 from openood.utils.cc_kde import DimensionWiseKdeOOD
 from openood.utils.col_div import ColumnarDistributionDivergence
 from openood.utils.cut_off import ScreeCutoffSelector
@@ -33,11 +27,6 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
     def setup(self, net: nn.Module, id_loader_dict, ood_loader_dict):
 
         scanner = NetworkScanner(net, target_layer_names=self.target_layer_names)
-
-        # original_train_loader = id_loader_dict["train"]
-        # one_batch_train_iterator = itertools.islice(original_train_loader, 1)
-        # id_loader_dict = {"train": one_batch_train_iterator}
-
         scan, _ = scanner.predict(id_loader_dict["train"])
         scan.write_csv("scan.csv")
         print(scan)
@@ -66,28 +55,21 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
         scan_subset = scan_subset.with_columns(scan.get_column('label'))
         self.dw_kde.fit(data=scan_subset, like=self.inference_layer_names, label_col="label")
 
-    @torch.no_grad()
-    def postprocess(self, net: nn.Module, data: Any):
+    def inference(self, net: nn.Module, data_loader: DataLoader, progress: bool = True):
         scanner = NetworkScanner(net, target_layer_names=self.target_layer_names)
-        scan, output = scanner.predict(data)
+        scan, output = scanner.predict(data_loader)
 
         pp_data = scan.select(self.inference_layer_names)
         class_ll = self.dw_kde.transform(pp_data)
+        class_ll = class_ll['ood_score_likelihood_difference'].to_list()
 
-        score = torch.softmax(output, dim=1)
-        _, pred = torch.max(score, dim=1)
+        all_labels = [
+            batch["label"].cpu()
+            for batch in data_loader
+            if isinstance(batch, dict) and "label" in batch and isinstance(batch["label"], torch.Tensor)
+        ]
 
-        return pred, class_ll
+        logits_tensor = torch.tensor(output)
+        pred = torch.softmax(logits_tensor, dim=1).tolist()
 
-    def inference(self, net: nn.Module, data_loader: DataLoader, progress: bool = True):
-        pred_list, conf_list, label_list = [], [], []
-        for batch in tqdm(
-                data_loader, disable=not progress or not comm.is_main_process()
-        ):
-            data = batch["data"].cuda()
-            label = batch["label"].cuda()
-            pred, conf = self.postprocess(net, data)
-
-            pred_list.append(pred.cpu())
-            conf_list.append(conf.cpu())
-            label_list.append(label.cpu())
+        return pred, class_ll, torch.cat(all_labels, dim=0).tolist()
