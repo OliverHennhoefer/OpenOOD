@@ -1,3 +1,6 @@
+# PyCharm
+.idea
+
 # ignore some temp/test files
 _test_*
 *-backup*
