@@ -15,6 +15,7 @@ setuptools.setup(
     url='https://github.com/Jingkang50/OpenOOD',
     packages=setuptools.find_packages(),
     install_requires=[
+        'numpy<2.0.0',
         'torch>=1.13.1',
         'torchvision>=0.13',
         'scikit-learn',
@@ -31,6 +32,7 @@ setuptools.setup(
         'Cython>=0.29.30',
         'faiss-cpu~=1.11.0',
         'gdown>=4.7.1',  # 'libmr>=0.1.9'
+        'polars~=1.28.1',
     ],
     classifiers=[
         'Programming Language :: Python :: 3',

@@ -27,7 +27,6 @@ from .npos_postprocessor import NPOSPostprocessor
 from .odin_postprocessor import ODINPostprocessor
 from .iodin_postprocessor import IODINPostprocessor
 from .opengan_postprocessor import OpenGanPostprocessor
-from .openmax_postprocessor import OpenMax
 from .patchcore_postprocessor import PatchcorePostprocessor
 from .rd4ad_postprocessor import Rd4adPostprocessor
 from .react_postprocessor import ReactPostprocessor
@@ -46,4 +45,3 @@ from .nnguide_postprocessor import NNGuidePostprocessor
 from .relation_postprocessor import RelationPostprocessor
 from .t2fnorm_postprocessor import T2FNormPostprocessor
 from .reweightood_postprocessor import ReweightOODPostprocessor
-from .adascale_postprocessor import AdaScalePostprocessor

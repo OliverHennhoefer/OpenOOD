@@ -16,7 +16,7 @@ from openood.postprocessors import (
     RMDSPostprocessor, SHEPostprocessor, CIDERPostprocessor, NPOSPostprocessor,
     GENPostprocessor, NNGuidePostprocessor, RelationPostprocessor,
     T2FNormPostprocessor, ReweightOODPostprocessor, fDBDPostprocessor,
-    AdaScalePostprocessor, IODINPostprocessor, NCIPostprocessor)
+    IODINPostprocessor, NCIPostprocessor)
 from openood.postprocessors.lipro_postprocessor import LikelihoodProfilingPostprocessor
 from openood.utils.config import Config, merge_configs
 
@@ -68,8 +68,6 @@ postprocessors = {
     'relation': RelationPostprocessor,
     't2fnorm': T2FNormPostprocessor,
     'reweightood': ReweightOODPostprocessor,
-    'adascale_a': AdaScalePostprocessor,
-    'adascale_l': AdaScalePostprocessor,
 }
 
 link_prefix = 'https://raw.githubusercontent.com/Jingkang50/OpenOOD/main/configs/postprocessors/'
