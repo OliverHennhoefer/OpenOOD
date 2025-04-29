@@ -47,8 +47,9 @@ from openood.postprocessors import (
     fDBDPostprocessor,
     IODINPostprocessor,
     NCIPostprocessor,
+    LikelihoodProfilingPostprocessor,
 )
-from openood.postprocessors.lipro_postprocessor import LikelihoodProfilingPostprocessor
+
 from openood.utils.config import Config, merge_configs
 
 postprocessors = {
@@ -103,7 +104,7 @@ postprocessors = {
 }
 
 link_prefix = (
-    "https://raw.githubusercontent.com/Jingkang50/OpenOOD/main/configs/postprocessors/"
+    "https://raw.githubusercontent.com/OliverHennhofer/OpenOOD/main/configs/postprocessors/"
 )
 
 
