@@ -29,9 +29,8 @@ setuptools.setup(
         'pandas',
         'diffdist>=0.1',
         'Cython>=0.29.30',
-        'faiss-cpu',
-        'gdown>=4.7.1',
-        'polars~=1.28.1',
+        'faiss',
+        'gdown>=4.7.1',  # 'libmr>=0.1.9'
     ],
     classifiers=[
         'Programming Language :: Python :: 3',
