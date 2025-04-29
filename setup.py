@@ -29,7 +29,7 @@ setuptools.setup(
         'pandas',
         'diffdist>=0.1',
         'Cython>=0.29.30',
-        'faiss',
+        'faiss>=1.7.2',
         'gdown>=4.7.1',  # 'libmr>=0.1.9'
     ],
     classifiers=[
