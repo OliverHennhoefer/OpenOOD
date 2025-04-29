@@ -12,8 +12,10 @@ else:
 
 from openood.datasets.imglist_dataset import ImglistDataset
 from openood.preprocessors import BasePreprocessor
-
-from .preprocessor import get_default_preprocessor, ImageNetCPreProcessor
+from openood.evaluation_api.preprocessor import (
+    get_default_preprocessor,
+    ImageNetCPreProcessor,
+)
 
 DATA_INFO = {
     "cifar10": {
@@ -386,12 +388,23 @@ def download_dataset(dataset, data_root):
         print(store_path)
         if not store_path.endswith("/"):
             store_path = store_path + "/"
-        gdown.download(id=download_id_dict[dataset], output=store_path)
+        # Construct the explicit *full path* for the output zip file
+        final_zip_path = os.path.join(store_path, dataset + ".zip")
 
-        file_path = os.path.join(store_path, dataset + ".zip")
-        with zipfile.ZipFile(file_path, "r") as zip_file:
+        # Tell gdown to download directly to this final path (it will still use a .part internally)
+        print(
+            f"Downloading {dataset} to {final_zip_path}..."
+        )  # Optional: Add more logging
+        gdown.download(
+            id=download_id_dict[dataset], output=final_zip_path
+        )  # Pass the full file path
+
+        # Now use the same final_zip_path for unzipping and removal
+        print(f"Unzipping {final_zip_path}...")  # Optional: Add more logging
+        with zipfile.ZipFile(final_zip_path, "r") as zip_file:
             zip_file.extractall(store_path)
-        os.remove(file_path)
+        os.remove(final_zip_path)
+        print(f"Finished processing {dataset}.")  # Optional: Add more logging
 
 
 def data_setup(data_root, id_data_name):

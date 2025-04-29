@@ -15,9 +15,9 @@ from openood.networks.react_net import ReactNet
 from openood.networks.scale_net import ScaleNet
 from openood.networks.adascale_net import AdaScaleANet, AdaScaleLNet
 
-from .datasets import DATA_INFO, data_setup, get_id_ood_dataloader
-from .postprocessor import get_postprocessor
-from .preprocessor import get_default_preprocessor
+from openood.evaluation_api.datasets import DATA_INFO, data_setup, get_id_ood_dataloader
+from openood.evaluation_api.postprocessor import get_postprocessor
+from openood.evaluation_api.preprocessor import get_default_preprocessor
 
 
 class Evaluator:
