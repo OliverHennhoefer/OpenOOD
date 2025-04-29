@@ -12,8 +12,9 @@ from .lr_scheduler import cosine_annealing
 
 
 class AugMixTrainer:
-    def __init__(self, net: nn.Module, train_loader: DataLoader,
-                 config: Config) -> None:
+    def __init__(
+        self, net: nn.Module, train_loader: DataLoader, config: Config
+    ) -> None:
 
         self.net = net
         self.train_loader = train_loader
@@ -45,43 +46,52 @@ class AugMixTrainer:
         loss_avg = 0.0
         train_dataiter = iter(self.train_loader)
 
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True,
-                               disable=not comm.is_main_process()):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             batch = next(train_dataiter)
-            target = batch['label'].cuda()
+            target = batch["label"].cuda()
 
             if self.jsd:
-                orig_data = batch['data'].cuda()
-                aug1_data = batch['data_aug1'].cuda()
-                aug2_data = batch['data_aug2'].cuda()
+                orig_data = batch["data"].cuda()
+                aug1_data = batch["data_aug1"].cuda()
+                aug2_data = batch["data_aug2"].cuda()
                 data = torch.cat([orig_data, aug1_data, aug2_data])
 
                 # forward
                 logits_all = self.net(data)
                 logits_clean, logits_aug1, logits_aug2 = torch.split(
-                    logits_all, orig_data.size(0))
+                    logits_all, orig_data.size(0)
+                )
 
                 # Cross-entropy is only computed on clean images
                 loss = F.cross_entropy(logits_clean, target)
 
-                p_clean, p_aug1, p_aug2 = \
-                    F.softmax(logits_clean, dim=1), \
-                    F.softmax(logits_aug1, dim=1), \
-                    F.softmax(logits_aug2, dim=1)
+                p_clean, p_aug1, p_aug2 = (
+                    F.softmax(logits_clean, dim=1),
+                    F.softmax(logits_aug1, dim=1),
+                    F.softmax(logits_aug2, dim=1),
+                )
 
                 # Clamp mixture distribution to avoid exploding KL divergence
-                p_mixture = torch.clamp((p_clean + p_aug1 + p_aug2) / 3., 1e-7,
-                                        1).log()
-                loss += self.lam * (
-                    F.kl_div(p_mixture, p_clean, reduction='batchmean') +
-                    F.kl_div(p_mixture, p_aug1, reduction='batchmean') +
-                    F.kl_div(p_mixture, p_aug2, reduction='batchmean')) / 3.
+                p_mixture = torch.clamp(
+                    (p_clean + p_aug1 + p_aug2) / 3.0, 1e-7, 1
+                ).log()
+                loss += (
+                    self.lam
+                    * (
+                        F.kl_div(p_mixture, p_clean, reduction="batchmean")
+                        + F.kl_div(p_mixture, p_aug1, reduction="batchmean")
+                        + F.kl_div(p_mixture, p_aug2, reduction="batchmean")
+                    )
+                    / 3.0
+                )
             else:
-                data = batch['data'].cuda()
+                data = batch["data"].cuda()
 
                 # forward
                 logits = self.net(data)
@@ -100,8 +110,8 @@ class AugMixTrainer:
         # comm.synchronize()
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = self.save_metrics(loss_avg)
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = self.save_metrics(loss_avg)
 
         return self.net, metrics
 

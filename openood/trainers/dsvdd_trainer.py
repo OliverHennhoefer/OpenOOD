@@ -11,14 +11,16 @@ class AETrainer:
         self.config = config
         self.net = net
         self.train_loader = train_loader
-        if config.optimizer.name == 'adam':
+        if config.optimizer.name == "adam":
             self.optimizer = optim.Adam(
                 net.parameters(),
                 lr=config.lr,
                 weight_decay=config.weight_decay,
-                amsgrad=config.optimizer.name == 'amsgrad')
+                amsgrad=config.optimizer.name == "amsgrad",
+            )
         self.scheduler = optim.lr_scheduler.MultiStepLR(
-            self.optimizer, milestones=config.lr_milestones, gamma=0.1)
+            self.optimizer, milestones=config.lr_milestones, gamma=0.1
+        )
 
     def train_epoch(self, epoch_idx):
 
@@ -26,25 +28,27 @@ class AETrainer:
         epoch_loss = 0
         train_dataiter = iter(self.train_loader)
 
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d} '.format(epoch_idx),
-                               position=0,
-                               leave=True):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d} ".format(epoch_idx),
+            position=0,
+            leave=True,
+        ):
             batch = next(train_dataiter)
-            inputs = batch['data'].cuda()
+            inputs = batch["data"].cuda()
             self.optimizer.zero_grad()
             outputs = self.net(inputs)
-            scores = torch.sum((outputs - inputs)**2,
-                               dim=tuple(range(1, outputs.dim())))
+            scores = torch.sum(
+                (outputs - inputs) ** 2, dim=tuple(range(1, outputs.dim()))
+            )
             loss = torch.mean(scores)
             loss.backward()
             self.optimizer.step()
             self.scheduler.step()
             epoch_loss += loss.item()
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = epoch_loss
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = epoch_loss
         return self.net, metrics
 
 
@@ -53,16 +57,18 @@ class DSVDDTrainer:
         self.config = config
         self.net = net
         self.train_loader = train_loader
-        if config.optimizer.name == 'adam':
+        if config.optimizer.name == "adam":
             self.optimizer = optim.Adam(
                 net.parameters(),
                 lr=config.lr,
                 weight_decay=config.weight_decay,
-                amsgrad=config.optimizer.name == 'amsgrad')
+                amsgrad=config.optimizer.name == "amsgrad",
+            )
         self.scheduler = optim.lr_scheduler.MultiStepLR(
-            self.optimizer, milestones=config.lr_milestones, gamma=0.1)
+            self.optimizer, milestones=config.lr_milestones, gamma=0.1
+        )
 
-        if self.config.c == 'None' and self.config.network.name != 'dcae':
+        if self.config.c == "None" and self.config.network.name != "dcae":
             self.config.c = init_center_c(train_loader, net)
         self.c = self.config.c
 
@@ -70,22 +76,24 @@ class DSVDDTrainer:
         self.net.train()
         epoch_loss = 0
         train_dataiter = iter(self.train_loader)
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}'.format(epoch_idx),
-                               position=0,
-                               leave=True):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}".format(epoch_idx),
+            position=0,
+            leave=True,
+        ):
             batch = next(train_dataiter)
-            inputs = batch['data'].cuda()
+            inputs = batch["data"].cuda()
             self.optimizer.zero_grad()
             outputs = self.net(inputs)
-            if self.config.network.name != 'dcae':
-                scores = torch.sum((outputs - self.c)**2, dim=1)
+            if self.config.network.name != "dcae":
+                scores = torch.sum((outputs - self.c) ** 2, dim=1)
 
             # this is for pre-training the dcae network from the original paper
-            elif self.config.network.name == 'dcae':
-                scores = torch.sum((outputs - inputs)**2,
-                                   dim=tuple(range(1, outputs.dim())))
+            elif self.config.network.name == "dcae":
+                scores = torch.sum(
+                    (outputs - inputs) ** 2, dim=tuple(range(1, outputs.dim()))
+                )
             else:
                 raise NotImplementedError
             loss = torch.mean(scores)
@@ -94,8 +102,8 @@ class DSVDDTrainer:
             self.scheduler.step()
             epoch_loss += loss.item()
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = epoch_loss
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = epoch_loss
         return self.net, metrics
 
 
@@ -107,13 +115,14 @@ def init_center_c(train_loader, net, eps=0.1):
     train_dataiter = iter(train_loader)
     net.eval()
     with torch.no_grad():
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Initialize center',
-                               position=0,
-                               leave=True):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Initialize center",
+            position=0,
+            leave=True,
+        ):
             batch = next(train_dataiter)
-            inputs = batch['data'].cuda()
+            inputs = batch["data"].cuda()
             outputs = net(inputs)
             if first_iter:
                 c = torch.zeros(outputs.shape[1]).cuda()

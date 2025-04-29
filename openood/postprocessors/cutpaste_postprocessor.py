@@ -16,26 +16,24 @@ class CutPastePostprocessor:
 
     def setup(self, net: nn.Module, id_loader_dict, ood_loader_dict):
         # get train embeds
-        train_loader = id_loader_dict['train']
+        train_loader = id_loader_dict["train"]
         train_embed = []
         train_dataiter = iter(train_loader)
         with torch.no_grad():
-            for train_step in tqdm(range(1,
-                                         len(train_dataiter) + 1),
-                                   desc='Train embeds'):
+            for train_step in tqdm(
+                range(1, len(train_dataiter) + 1), desc="Train embeds"
+            ):
                 batch = next(train_dataiter)
-                data = torch.cat(batch['data'], 0)
-                if (np.array(data).shape[0] == 4):
+                data = torch.cat(batch["data"], 0)
+                if np.array(data).shape[0] == 4:
                     data = data.numpy().tolist()
-                    data = data[0:len(data) // 2]
+                    data = data[0 : len(data) // 2]
                     data = torch.Tensor(data)
                 data = data.cuda()
                 embed, logit = net(data)
                 train_embed.append(embed.cuda())
         train_embeds = torch.cat(train_embed)
-        self.train_embeds = torch.nn.functional.normalize(train_embeds,
-                                                          p=2,
-                                                          dim=1)
+        self.train_embeds = torch.nn.functional.normalize(train_embeds, p=2, dim=1)
 
     @torch.no_grad()
     def postprocess(self, net: nn.Module, data: Any):
@@ -57,11 +55,11 @@ class CutPastePostprocessor:
     def inference(self, net: nn.Module, data_loader: DataLoader):
         pred_list, conf_list, label_list = [], [], []
         for batch in data_loader:
-            data = torch.cat(batch['data'], 0)
+            data = torch.cat(batch["data"], 0)
             data = data.cuda()
             # label = torch.arange(2)
             label = torch.tensor([0, -1])
-            label = label.repeat_interleave(len(batch['data'][0])).cuda()
+            label = label.repeat_interleave(len(batch["data"][0])).cuda()
             pred, conf = self.postprocess(net, data)
             for idx in range(len(data)):
                 pred_list.append(pred[idx].cpu().tolist())
@@ -87,17 +85,16 @@ class Density(object):
 class GaussianDensityTorch(Density):
     def fit(self, embeddings):
         self.mean = torch.mean(embeddings, axis=0)
-        self.inv_cov = torch.Tensor(LW().fit(embeddings.cpu()).precision_,
-                                    device='cpu')
+        self.inv_cov = torch.Tensor(LW().fit(embeddings.cpu()).precision_, device="cpu")
 
     def predict(self, embeddings):
-        distances = self.mahalanobis_distance(embeddings, self.mean,
-                                              self.inv_cov)
+        distances = self.mahalanobis_distance(embeddings, self.mean, self.inv_cov)
         return distances
 
     @staticmethod
-    def mahalanobis_distance(values: torch.Tensor, mean: torch.Tensor,
-                             inv_covariance: torch.Tensor) -> torch.Tensor:
+    def mahalanobis_distance(
+        values: torch.Tensor, mean: torch.Tensor, inv_covariance: torch.Tensor
+    ) -> torch.Tensor:
 
         assert values.dim() == 2
         assert 1 <= mean.dim() <= 2
@@ -111,6 +108,6 @@ class GaussianDensityTorch(Density):
         x_mu = values - mean  # batch x features
         # Same as dist = x_mu.t() * inv_covariance * x_mu batch wise
         inv_covariance = inv_covariance.cuda()
-        dist = torch.einsum('im,mn,in->i', x_mu, inv_covariance, x_mu)
+        dist = torch.einsum("im,mn,in->i", x_mu, inv_covariance, x_mu)
 
         return dist.sqrt()

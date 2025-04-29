@@ -24,7 +24,7 @@ def main(config):
     pipeline.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     config = setup_config()
     # generate output directory and save the full config file
@@ -38,6 +38,6 @@ if __name__ == '__main__':
         config.num_gpus,
         num_machines=config.num_machines,
         machine_rank=config.machine_rank,
-        dist_url='auto',
-        args=(config, ),
+        dist_url="auto",
+        args=(config,),
     )

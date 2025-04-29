@@ -38,9 +38,7 @@ class GodinPostprocessor(BasePostprocessor):
         gradient[:, 2] = (gradient[:, 2]) / self.input_std[2]
 
         # Adding small perturbations to images
-        tempInputs = torch.add(data.detach(),
-                               gradient,
-                               alpha=self.noise_magnitude)
+        tempInputs = torch.add(data.detach(), gradient, alpha=self.noise_magnitude)
 
         # calculate score
         output = net(tempInputs, inference=True, score_func=self.score_func)

@@ -16,12 +16,16 @@ class CutpasteRecorder:
         self.output_dir = config.output_dir
 
     def report(self, train_metrics, val_metrics):
-        print('\nEpoch {:03d} | Time {:5d}s | Train Loss {:.4f} | '
-              'AUROC {:.3f}'.format((val_metrics['epoch_idx']),
-                                    int(time.time() - self.begin_time),
-                                    train_metrics['loss'],
-                                    val_metrics['image_auroc']),
-              flush=True)
+        print(
+            "\nEpoch {:03d} | Time {:5d}s | Train Loss {:.4f} | "
+            "AUROC {:.3f}".format(
+                (val_metrics["epoch_idx"]),
+                int(time.time() - self.begin_time),
+                train_metrics["loss"],
+                val_metrics["image_auroc"],
+            ),
+            flush=True,
+        )
 
     def save_model(self, net, val_metrics):
         if self.config.recorder.save_all_models:
@@ -29,30 +33,35 @@ class CutpasteRecorder:
                 net.state_dict(),
                 os.path.join(
                     self.output_dir,
-                    'model_epoch{}.ckpt'.format(val_metrics['epoch_idx'])))
+                    "model_epoch{}.ckpt".format(val_metrics["epoch_idx"]),
+                ),
+            )
 
         # enter only if best auroc occurs
-        if val_metrics['image_auroc'] >= self.best_auroc:
+        if val_metrics["image_auroc"] >= self.best_auroc:
 
             # delete the depreciated best model
-            old_fname = 'best_epoch{}_auroc{}.ckpt'.format(
-                self.best_epoch_idx, self.best_auroc)
+            old_fname = "best_epoch{}_auroc{}.ckpt".format(
+                self.best_epoch_idx, self.best_auroc
+            )
             old_pth = os.path.join(self.output_dir, old_fname)
             Path(old_pth).unlink(missing_ok=True)
 
             # update the best model
-            self.best_epoch_idx = val_metrics['epoch_idx']
-            self.best_auroc = val_metrics['image_auroc']
-            torch.save(net.state_dict(),
-                       os.path.join(self.output_dir, 'best.ckpt'))
+            self.best_epoch_idx = val_metrics["epoch_idx"]
+            self.best_auroc = val_metrics["image_auroc"]
+            torch.save(net.state_dict(), os.path.join(self.output_dir, "best.ckpt"))
 
-            save_fname = 'best_epoch{}_auroc{}.ckpt'.format(
-                self.best_epoch_idx, self.best_auroc)
+            save_fname = "best_epoch{}_auroc{}.ckpt".format(
+                self.best_epoch_idx, self.best_auroc
+            )
             save_pth = os.path.join(self.output_dir, save_fname)
             torch.save(net.state_dict(), save_pth)
 
     def summary(self):
-        print('Training Completed! '
-              'Best auroc: {:.2f} '
-              'at epoch {:d}'.format(self.best_auroc, self.best_epoch_idx),
-              flush=True)
+        print(
+            "Training Completed! "
+            "Best auroc: {:.2f} "
+            "at epoch {:d}".format(self.best_auroc, self.best_epoch_idx),
+            flush=True,
+        )

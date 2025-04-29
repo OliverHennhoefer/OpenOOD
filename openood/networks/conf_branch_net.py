@@ -6,7 +6,7 @@ class ConfBranchNet(nn.Module):
         super(ConfBranchNet, self).__init__()
 
         self.backbone = backbone
-        if hasattr(self.backbone, 'fc'):
+        if hasattr(self.backbone, "fc"):
             # remove fc otherwise ddp will
             # report unused params
             self.backbone.fc = nn.Identity()

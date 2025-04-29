@@ -10,19 +10,19 @@ from .lr_scheduler import cosine_annealing
 
 
 class ARPLTrainer:
-    def __init__(self, net: nn.Module, train_loader: DataLoader,
-                 config: Config) -> None:
+    def __init__(
+        self, net: nn.Module, train_loader: DataLoader, config: Config
+    ) -> None:
 
-        self.net = net['netF']
+        self.net = net["netF"]
         self.train_loader = train_loader
         self.config = config
-        self.criterion = net['criterion']
+        self.criterion = net["criterion"]
 
-        params_list = [{
-            'params': self.net.parameters()
-        }, {
-            'params': self.criterion.parameters()
-        }]
+        params_list = [
+            {"params": self.net.parameters()},
+            {"params": self.criterion.parameters()},
+        ]
 
         self.optimizer = torch.optim.SGD(
             params_list,
@@ -48,15 +48,16 @@ class ARPLTrainer:
         loss_avg = 0.0
         train_dataiter = iter(self.train_loader)
 
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True,
-                               disable=not comm.is_main_process()):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             batch = next(train_dataiter)
-            data = batch['data'].cuda()
-            target = batch['label'].cuda()
+            data = batch["data"].cuda()
+            target = batch["label"].cuda()
 
             # forward
             _, feat = self.net(data, return_feature=True)
@@ -73,7 +74,7 @@ class ARPLTrainer:
                 loss_avg = loss_avg * 0.8 + float(loss) * 0.2
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = loss_avg
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = loss_avg
 
-        return {'netF': self.net, 'criterion': self.criterion}, metrics
+        return {"netF": self.net, "criterion": self.criterion}, metrics

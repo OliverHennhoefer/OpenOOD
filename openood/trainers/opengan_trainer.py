@@ -10,9 +10,9 @@ import openood.utils.comm as comm
 
 def weights_init(m):
     classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
+    if classname.find("Conv") != -1:
         nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
+    elif classname.find("BatchNorm") != -1:
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
 
@@ -21,13 +21,13 @@ class OpenGanTrainer:
     def __init__(self, net, feat_loader, config) -> None:
 
         manualSeed = 999
-        print('Random Seed: ', manualSeed)
+        print("Random Seed: ", manualSeed)
         random.seed(manualSeed)
         torch.manual_seed(manualSeed)
 
         self.config = config
-        self.netG = net['netG']
-        self.netD = net['netD']
+        self.netG = net["netG"]
+        self.netD = net["netD"]
         self.netG.apply(weights_init)
         self.netD.apply(weights_init)
         self.feat_loader = feat_loader
@@ -38,12 +38,16 @@ class OpenGanTrainer:
         self.fake_label = 0
 
         optimizer_config = self.config.optimizer
-        self.optimizerD = optim.Adam(self.netD.parameters(),
-                                     lr=optimizer_config.lr / 1.5,
-                                     betas=(optimizer_config.beta1, 0.999))
-        self.optimizerG = optim.Adam(self.netG.parameters(),
-                                     lr=optimizer_config.lr,
-                                     betas=(optimizer_config.beta1, 0.999))
+        self.optimizerD = optim.Adam(
+            self.netD.parameters(),
+            lr=optimizer_config.lr / 1.5,
+            betas=(optimizer_config.beta1, 0.999),
+        )
+        self.optimizerG = optim.Adam(
+            self.netG.parameters(),
+            lr=optimizer_config.lr,
+            betas=(optimizer_config.beta1, 0.999),
+        )
 
         self.criterion = nn.BCELoss()
 
@@ -54,13 +58,14 @@ class OpenGanTrainer:
 
         feat_dataiter = iter(self.feat_loader)
 
-        for train_step in tqdm(range(1,
-                                     len(feat_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True,
-                               disable=not comm.is_main_process()):
-            data = next(feat_dataiter)['data']
+        for train_step in tqdm(
+            range(1, len(feat_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
+            data = next(feat_dataiter)["data"]
             ############################
             # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
             ###########################
@@ -69,7 +74,7 @@ class OpenGanTrainer:
             # Format batch
             loaded_data = data.cuda()
             b_size = loaded_data.size(0)
-            label = torch.full((b_size, ), self.real_label).cuda()
+            label = torch.full((b_size,), self.real_label).cuda()
             label = label.to(torch.float32)
 
             # Forward pass real batch through D
@@ -104,8 +109,7 @@ class OpenGanTrainer:
             # (2) Update G network: maximize log(D(G(z)))
             ###########################
             self.netG.zero_grad()
-            label.fill_(
-                self.real_label)  # fake labels are real for generator cost
+            label.fill_(self.real_label)  # fake labels are real for generator cost
             # Since we just updated D,
             # perform another forward pass of all-fake batch through D
             output = self.netD(fake).view(-1)
@@ -121,11 +125,8 @@ class OpenGanTrainer:
             self.G_losses.append(errG.item())
             self.D_losses.append(errD.item())
 
-        return {
-            'netG': self.netG,
-            'netD': self.netD
-        }, {
-            'G_losses': self.G_losses,
-            'D_losses': self.D_losses,
-            'epoch_idx': epoch_idx
+        return {"netG": self.netG, "netD": self.netD}, {
+            "G_losses": self.G_losses,
+            "D_losses": self.D_losses,
+            "epoch_idx": epoch_idx,
         }

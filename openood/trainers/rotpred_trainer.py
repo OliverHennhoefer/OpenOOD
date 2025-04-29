@@ -12,8 +12,9 @@ from .lr_scheduler import cosine_annealing
 
 
 class RotPredTrainer:
-    def __init__(self, net: nn.Module, train_loader: DataLoader,
-                 config: Config) -> None:
+    def __init__(
+        self, net: nn.Module, train_loader: DataLoader, config: Config
+    ) -> None:
 
         self.net = net
         self.train_loader = train_loader
@@ -43,15 +44,16 @@ class RotPredTrainer:
         loss_avg = 0.0
         train_dataiter = iter(self.train_loader)
 
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True,
-                               disable=not comm.is_main_process()):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             batch = next(train_dataiter)
-            data = batch['data'].cuda()
-            target = batch['label'].cuda()
+            data = batch["data"].cuda()
+            target = batch["label"].cuda()
 
             batch_size = len(data)
             x_90 = torch.rot90(data, 1, [2, 3])
@@ -59,12 +61,18 @@ class RotPredTrainer:
             x_270 = torch.rot90(data, 3, [2, 3])
 
             x_rot = torch.cat([data, x_90, x_180, x_270])
-            y_rot = torch.cat([
-                torch.zeros(batch_size),
-                torch.ones(batch_size),
-                2 * torch.ones(batch_size),
-                3 * torch.ones(batch_size),
-            ]).long().cuda()
+            y_rot = (
+                torch.cat(
+                    [
+                        torch.zeros(batch_size),
+                        torch.ones(batch_size),
+                        2 * torch.ones(batch_size),
+                        3 * torch.ones(batch_size),
+                    ]
+                )
+                .long()
+                .cuda()
+            )
 
             # forward
             logits, logits_rot = self.net(x_rot, return_rot_logits=True)
@@ -85,8 +93,8 @@ class RotPredTrainer:
         # comm.synchronize()
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = self.save_metrics(loss_avg)
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = self.save_metrics(loss_avg)
 
         return self.net, metrics
 

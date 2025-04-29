@@ -48,11 +48,13 @@ def auc_and_fpr_recall(conf, label, tpr_th):
     fpr_list, tpr_list, thresholds = metrics.roc_curve(ood_indicator, -conf)
     fpr = fpr_list[np.argmax(tpr_list >= tpr_th)]
 
-    precision_in, recall_in, thresholds_in \
-        = metrics.precision_recall_curve(1 - ood_indicator, conf)
+    precision_in, recall_in, thresholds_in = metrics.precision_recall_curve(
+        1 - ood_indicator, conf
+    )
 
-    precision_out, recall_out, thresholds_out \
-        = metrics.precision_recall_curve(ood_indicator, -conf)
+    precision_out, recall_out, thresholds_out = metrics.precision_recall_curve(
+        ood_indicator, -conf
+    )
 
     auroc = metrics.auc(fpr_list, tpr_list)
     aupr_in = metrics.auc(recall_in, precision_in)
@@ -80,10 +82,7 @@ def ccr_fpr(conf, fpr, pred, label):
     return ccr
 
 
-def detection(ind_confidences,
-              ood_confidences,
-              n_iter=100000,
-              return_data=False):
+def detection(ind_confidences, ood_confidences, n_iter=100000, return_data=False):
     # calculate the minimum detection error
     Y1 = ood_confidences
     X1 = ind_confidences

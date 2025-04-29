@@ -25,7 +25,7 @@ def cal_ood_score(logits, group_slices):
 
     smax = torch.nn.Softmax(dim=-1).cuda()
     for i in range(num_groups):
-        group_logit = logits[:, group_slices[i][0]:group_slices[i][1]]
+        group_logit = logits[:, group_slices[i][0] : group_slices[i][1]]
 
         group_softmax = smax(group_logit)
         group_others_score = group_softmax[:, 0]
@@ -46,38 +46,40 @@ class MOSPostprocessor(BasePostprocessor):
     def cal_group_slices(self, train_loader):
         config = self.config
         # if specified group_config
-        if (config.trainer.group_config.endswith('npy')):
+        if config.trainer.group_config.endswith("npy"):
             classes_per_group = np.load(config.trainer.group_config)
-        elif (config.trainer.group_config.endswith('txt')):
-            classes_per_group = np.loadtxt(config.trainer.group_config,
-                                           dtype=int)
+        elif config.trainer.group_config.endswith("txt"):
+            classes_per_group = np.loadtxt(config.trainer.group_config, dtype=int)
         else:
             # cal group config
             config = self.config
             group = {}
             train_dataiter = iter(train_loader)
-            for train_step in tqdm(range(1,
-                                         len(train_dataiter) + 1),
-                                   desc='cal group_config',
-                                   position=0,
-                                   leave=True):
+            for train_step in tqdm(
+                range(1, len(train_dataiter) + 1),
+                desc="cal group_config",
+                position=0,
+                leave=True,
+            ):
                 batch = next(train_dataiter)
-                group_label = batch['group_label'].cuda()
-                class_label = batch['class_label'].cuda()
+                group_label = batch["group_label"].cuda()
+                class_label = batch["class_label"].cuda()
 
                 for i in range(len(class_label)):
                     try:
-                        group[str(
-                            group_label[i].cpu().detach().numpy().tolist())]
+                        group[str(group_label[i].cpu().detach().numpy().tolist())]
                     except:
-                        group[str(group_label[i].cpu().detach().numpy().tolist(
-                        ))] = []
+                        group[str(group_label[i].cpu().detach().numpy().tolist())] = []
 
-                    if class_label[i].cpu().detach().numpy().tolist() \
-                            not in group[str(group_label[i].cpu().detach().numpy().tolist())]:
-                        group[str(group_label[i].cpu().detach().numpy().tolist(
-                        ))].append(
-                            class_label[i].cpu().detach().numpy().tolist())
+                    if (
+                        class_label[i].cpu().detach().numpy().tolist()
+                        not in group[
+                            str(group_label[i].cpu().detach().numpy().tolist())
+                        ]
+                    ):
+                        group[
+                            str(group_label[i].cpu().detach().numpy().tolist())
+                        ].append(class_label[i].cpu().detach().numpy().tolist())
 
             classes_per_group = []
             for i in range(len(group)):

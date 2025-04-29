@@ -2,13 +2,10 @@ from torchvision.models.resnet import BasicBlock, ResNet
 
 
 class ResNet18_224x224(ResNet):
-    def __init__(self,
-                 block=BasicBlock,
-                 layers=[2, 2, 2, 2],
-                 num_classes=1000):
-        super(ResNet18_224x224, self).__init__(block=block,
-                                               layers=layers,
-                                               num_classes=num_classes)
+    def __init__(self, block=BasicBlock, layers=[2, 2, 2, 2], num_classes=1000):
+        super(ResNet18_224x224, self).__init__(
+            block=block, layers=layers, num_classes=num_classes
+        )
         self.feature_size = 512
 
     def forward(self, x, return_feature=False, return_feature_list=False):

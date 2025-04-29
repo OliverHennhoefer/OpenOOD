@@ -5,7 +5,7 @@ from .sce import soft_cross_entropy
 
 
 def rew_ce(logits, labels, sample_weights):
-    losses = F.cross_entropy(logits, labels, reduction='none')
+    losses = F.cross_entropy(logits, labels, reduction="none")
     return (losses * sample_weights.type_as(losses)).mean()
 
 

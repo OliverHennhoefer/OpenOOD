@@ -19,6 +19,10 @@ class SSDPostprocessor(BasePostprocessor):
         self.feature_mean, self.feature_prec = None, None
 
     def setup(self, net: nn.Module, id_loader_dict, ood_loader_dict):
-        self.feature_mean, self.feature_prec, self.transform_matrix = \
-            get_MDS_stat(net, id_loader_dict['train'], self.num_classes,
-                         self.feature_type_list, self.reduce_dim_list)
+        self.feature_mean, self.feature_prec, self.transform_matrix = get_MDS_stat(
+            net,
+            id_loader_dict["train"],
+            self.num_classes,
+            self.feature_type_list,
+            self.reduce_dim_list,
+        )

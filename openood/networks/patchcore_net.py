@@ -23,7 +23,7 @@ class PatchcoreNet(nn.Module):
             param.requires_grad = False
         # self.module.cuda()
         backbone.cuda()
-        self.criterion = torch.nn.MSELoss(reduction='sum')
+        self.criterion = torch.nn.MSELoss(reduction="sum")
 
     def forward(self, x, return_feature):
         _, feature_list = self.backbone(x, return_feature_list=True)

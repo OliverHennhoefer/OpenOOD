@@ -18,18 +18,20 @@ import importlib.util
 
 
 class ISHTrainer:
-    def __init__(self, net: nn.Module, train_loader: DataLoader,
-                 config: Config) -> None:
+    def __init__(
+        self, net: nn.Module, train_loader: DataLoader, config: Config
+    ) -> None:
         self.net = net
         self.train_loader = train_loader
         self.config = config
         self.optimizer = torch.optim.SGD(
-            [{
-                'params': list(net.parameters())[:-2]
-            }, {
-                'params': list(net.parameters())[-2:],
-                'weight_decay': config.optimizer.weight_decay_fc
-            }],
+            [
+                {"params": list(net.parameters())[:-2]},
+                {
+                    "params": list(net.parameters())[-2:],
+                    "weight_decay": config.optimizer.weight_decay_fc,
+                },
+            ],
             config.optimizer.lr,
             momentum=config.optimizer.momentum,
             weight_decay=config.optimizer.weight_decay,
@@ -46,10 +48,12 @@ class ISHTrainer:
             ),
         )
 
-        self.net = to_ish(self.net,
-                          strategy=config.trainer.trainer_args.mode,
-                          param=config.trainer.trainer_args.param,
-                          layer=config.trainer.trainer_args.layer)
+        self.net = to_ish(
+            self.net,
+            strategy=config.trainer.trainer_args.mode,
+            param=config.trainer.trainer_args.param,
+            layer=config.trainer.trainer_args.layer,
+        )
 
     def train_epoch(self, epoch_idx):
         self.net.train()
@@ -58,21 +62,21 @@ class ISHTrainer:
 
         train_dataiter = iter(self.train_loader)
 
-        with tqdm(range(1,
-                        len(train_dataiter) + 1),
-                  desc='Epoch {:03d}'.format(epoch_idx),
-                  position=0,
-                  leave=True,
-                  disable=not comm.is_main_process()) as tepoch:
+        with tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ) as tepoch:
 
             for train_step in tepoch:
                 batch = next(train_dataiter)
-                data = batch['data'].cuda()
-                target = batch['label'].cuda()
+                data = batch["data"].cuda()
+                target = batch["label"].cuda()
 
                 # forward
-                logits_classifier, feature = self.net(data,
-                                                      return_feature=True)
+                logits_classifier, feature = self.net(data, return_feature=True)
                 loss = F.cross_entropy(logits_classifier, target)
 
                 # backward
@@ -88,8 +92,8 @@ class ISHTrainer:
         # comm.synchronize()
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = self.save_metrics(loss_avg)
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = self.save_metrics(loss_avg)
 
         return self.net, metrics
 
@@ -102,8 +106,9 @@ class ISHTrainer:
 
 class _ISHTLinear(Function):
     @staticmethod
-    def forward(ctx, x: torch.Tensor, weight: nn.Parameter, bias: nn.Parameter,
-                ish_reshaper):
+    def forward(
+        ctx, x: torch.Tensor, weight: nn.Parameter, bias: nn.Parameter, ish_reshaper
+    ):
         ctx.ish_reshaper = ish_reshaper
         ctx.x_shape = x.shape
         ctx.has_bias = bias is not None
@@ -113,8 +118,11 @@ class _ISHTLinear(Function):
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
         x, weight = ctx.saved_tensors
-        grad_bias = torch.sum(grad_output, list(
-            range(grad_output.dim() - 1))) if ctx.has_bias else None
+        grad_bias = (
+            torch.sum(grad_output, list(range(grad_output.dim() - 1)))
+            if ctx.has_bias
+            else None
+        )
         ic, oc = weight.shape
         x = ctx.ish_reshaper.pad(x, ctx)
         grad_weight = grad_output.view(-1, ic).T.mm(x.view(-1, oc))
@@ -143,8 +151,8 @@ class ISHReshaper(object):
         self.param = param
         self.reserve = 1 - param
 
-        self.select = getattr(self, f'cache_{strategy}')
-        self.pad = getattr(self, f'load_{strategy}')
+        self.select = getattr(self, f"cache_{strategy}")
+        self.pad = getattr(self, f"load_{strategy}")
 
     def cache_minksample_expscale(self, x: torch.Tensor, ctx=None):
         shape = x.shape
@@ -152,9 +160,7 @@ class ISHReshaper(object):
         # calculate the sum of the input per sample
         s1 = x.sum(dim=[1])
 
-        x, idxs = x.abs().topk(int(x.shape[1] * self.reserve),
-                               dim=1,
-                               sorted=False)
+        x, idxs = x.abs().topk(int(x.shape[1] * self.reserve), dim=1, sorted=False)
         x.dropped = True  # provide a flag for act judges
 
         # calculate new sum of the input per sample after pruning
@@ -169,8 +175,9 @@ class ISHReshaper(object):
         return x
 
     def load_minksample_expscale(self, x, ctx=None):
-        return torch.zeros(ctx.shape, device=x.device,
-                           dtype=x.dtype).scatter_(1, ctx.idxs, x)
+        return torch.zeros(ctx.shape, device=x.device, dtype=x.dtype).scatter_(
+            1, ctx.idxs, x
+        )
 
     def cache_expscale(self, x: torch.Tensor, ctx=None):
         input = x.clone()
@@ -179,9 +186,7 @@ class ISHReshaper(object):
         # calculate the sum of the input per sample
         s1 = x.sum(dim=[1])
 
-        x, idxs = x.abs().topk(int(x.shape[1] * self.reserve),
-                               dim=1,
-                               sorted=False)
+        x, idxs = x.abs().topk(int(x.shape[1] * self.reserve), dim=1, sorted=False)
         x.dropped = True  # provide a flag for act judges
 
         # calculate new sum of the input per sample after pruning
@@ -210,9 +215,7 @@ class ISHReshaper(object):
         # calculate the sum of the input per sample
         s1 = x.sum(dim=[1])
 
-        x, idxs = x.abs().topk(int(x.shape[1] * self.reserve),
-                               dim=1,
-                               sorted=False)
+        x, idxs = x.abs().topk(int(x.shape[1] * self.reserve), dim=1, sorted=False)
         x.dropped = True  # provide a flag for act judges
 
         # calculate new sum of the input per sample after pruning
@@ -227,8 +230,9 @@ class ISHReshaper(object):
         return x
 
     def load_minksample_lnscale(self, x, ctx=None):
-        return torch.zeros(ctx.shape, device=x.device,
-                           dtype=x.dtype).scatter_(1, ctx.idxs, x)
+        return torch.zeros(ctx.shape, device=x.device, dtype=x.dtype).scatter_(
+            1, ctx.idxs, x
+        )
 
     @staticmethod
     def transfer(model, strategy, gamma, autocast):
@@ -236,25 +240,23 @@ class ISHReshaper(object):
         ish_reshaper = ISHReshaper(strategy, gamma)
         model.forward = partial(supports[_type], model)
         model.ish_reshaper = ish_reshaper
-        print(f'{_type}.forward => ish.{strategy}.{_type}.forward')
+        print(f"{_type}.forward => ish.{strategy}.{_type}.forward")
 
         for child in model.children():
             ISHReshaper.transfer(child, strategy, gamma, autocast)
         return model
 
 
-def to_ish(model: nn.Module,
-           strategy: str,
-           param: float,
-           autocast: bool = False,
-           layer=None):
-    if layer == 'r1':
-        if hasattr(model, 'module'):
+def to_ish(
+    model: nn.Module, strategy: str, param: float, autocast: bool = False, layer=None
+):
+    if layer == "r1":
+        if hasattr(model, "module"):
             ISHReshaper.transfer(model.module.fc, strategy, param, autocast)
         else:
             ISHReshaper.transfer(model.fc, strategy, param, autocast)
 
-    elif layer == 'all':
+    elif layer == "all":
         ISHReshaper.transfer(model, strategy, param, autocast)
 
     return model

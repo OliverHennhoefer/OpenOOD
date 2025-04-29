@@ -25,7 +25,7 @@ class TrainOpenGanPipeline:
         # init recorder
         recorder = get_recorder(self.config)
 
-        print('Start training...', flush=True)
+        print("Start training...", flush=True)
         for epoch_idx in range(1, self.config.optimizer.num_epochs + 1):
             # train the model
             net, train_metrics = trainer.train_epoch(epoch_idx)
@@ -33,4 +33,4 @@ class TrainOpenGanPipeline:
             recorder.report(train_metrics)
         recorder.summary()
 
-        print('Completed!', flush=True)
+        print("Completed!", flush=True)

@@ -19,79 +19,90 @@ from openood.utils import Config
 
 
 class CSITrainer:
-    def __init__(self, net: nn.Module, train_loader: DataLoader,
-                 config: Config) -> None:
-        self.net = net['backbone']
+    def __init__(
+        self, net: nn.Module, train_loader: DataLoader, config: Config
+    ) -> None:
+        self.net = net["backbone"]
         self.train_loader = train_loader
         self.config = config
         self.mode = config.mode
 
         if self.config.num_gpus > 1:
-            self.dummy_net = net['dummy_net'].module
+            self.dummy_net = net["dummy_net"].module
         else:
-            self.dummy_net = net['dummy_net']
+            self.dummy_net = net["dummy_net"]
         self.dummy_net.cpu()
 
         self.simclr_aug = get_simclr_augmentation(
-            config, image_size=config.dataset.image_size).cuda()
-        self.linear = net['linear']
+            config, image_size=config.dataset.image_size
+        ).cuda()
+        self.linear = net["linear"]
         self.linear_optim = torch.optim.Adam(
             self.linear.parameters(),
             lr=1e-3,
-            betas=(.9, .999),
-            weight_decay=config.optimizer.weight_decay)
+            betas=(0.9, 0.999),
+            weight_decay=config.optimizer.weight_decay,
+        )
         self.criterion = nn.CrossEntropyLoss().cuda()
         self.hflip = HorizontalFlipLayer().cuda()
 
-        self.simclr_layer = net['simclr_layer']
-        self.rotation_linear = net['shift_cls_layer']
-        self.joint_linear = net['joint_distribution_layer']
+        self.simclr_layer = net["simclr_layer"]
+        self.rotation_linear = net["shift_cls_layer"]
+        self.joint_linear = net["joint_distribution_layer"]
 
-        if 'step1' in self.mode:
+        if "step1" in self.mode:
             self.optimizer = optim.SGD(
-                list(self.net.parameters()) +
-                list(self.simclr_layer.parameters()),
+                list(self.net.parameters()) + list(self.simclr_layer.parameters()),
                 lr=config.optimizer.lr,
                 momentum=0.9,
-                weight_decay=config.optimizer.weight_decay)
+                weight_decay=config.optimizer.weight_decay,
+            )
             self.scheduler = lr_scheduler.CosineAnnealingLR(
-                self.optimizer, config.optimizer.num_epochs)
+                self.optimizer, config.optimizer.num_epochs
+            )
             self.scheduler_warmup = GradualWarmupScheduler(
                 self.optimizer,
                 multiplier=10.0,
                 total_epoch=config.optimizer.warmup,
-                after_scheduler=self.scheduler)
+                after_scheduler=self.scheduler,
+            )
         else:
             milestones = [
                 int(0.6 * config.optimizer.num_epochs),
                 int(0.75 * config.optimizer.num_epochs),
-                int(0.9 * config.optimizer.num_epochs)
+                int(0.9 * config.optimizer.num_epochs),
             ]
 
             self.linear_optim = torch.optim.Adam(
                 self.linear.parameters(),
                 lr=1e-3,
-                betas=(.9, .999),
-                weight_decay=config.optimizer.weight_decay)
+                betas=(0.9, 0.999),
+                weight_decay=config.optimizer.weight_decay,
+            )
             self.linear_scheduler = lr_scheduler.MultiStepLR(
-                self.linear_optim, gamma=0.1, milestones=milestones)
+                self.linear_optim, gamma=0.1, milestones=milestones
+            )
 
             self.rotation_linear_optim = torch.optim.SGD(
                 self.rotation_linear.parameters(),
                 lr=1e-1,
-                weight_decay=config.optimizer.weight_decay)
+                weight_decay=config.optimizer.weight_decay,
+            )
             self.rot_scheduler = lr_scheduler.MultiStepLR(
-                self.rotation_linear_optim, gamma=0.1, milestones=milestones)
+                self.rotation_linear_optim, gamma=0.1, milestones=milestones
+            )
 
             self.joint_linear_optim = torch.optim.SGD(
                 self.joint_linear.parameters(),
                 lr=1e-1,
-                weight_decay=config.optimizer.weight_decay)
+                weight_decay=config.optimizer.weight_decay,
+            )
             self.joint_scheduler = lr_scheduler.MultiStepLR(
-                self.joint_linear_optim, gamma=0.1, milestones=milestones)
+                self.joint_linear_optim, gamma=0.1, milestones=milestones
+            )
 
     def train_epoch(self, epoch_idx):
-        if 'step1' in self.mode:
+        if "step1" in self.mode:
             return self.train_sup_epoch(epoch_idx)
         else:
             return self.train_suplinear_epoch(epoch_idx)
@@ -101,29 +112,30 @@ class CSITrainer:
         train_dataiter = iter(self.train_loader)
 
         n = 0
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True,
-                               disable=not comm.is_main_process()):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             batch = next(train_dataiter)
-            images = batch['data'].cuda()
-            labels = batch['label'].cuda()
+            images = batch["data"].cuda()
+            labels = batch["label"].cuda()
 
             batch_size = images.size(0)
-            images1, images2 = self.hflip(images.repeat(2, 1, 1,
-                                                        1)).chunk(2)  # hflip
+            images1, images2 = self.hflip(images.repeat(2, 1, 1, 1)).chunk(2)  # hflip
             images1 = torch.cat(
-                [torch.rot90(images1, rot, (2, 3)) for rot in range(4)])  # 4B
+                [torch.rot90(images1, rot, (2, 3)) for rot in range(4)]
+            )  # 4B
             images2 = torch.cat(
-                [torch.rot90(images2, rot, (2, 3)) for rot in range(4)])  # 4B
+                [torch.rot90(images2, rot, (2, 3)) for rot in range(4)]
+            )  # 4B
             images_pair = torch.cat([images1, images2], dim=0)  # 8B
 
-            rot_sim_labels = torch.cat([
-                labels + self.config.dataset.num_classes * i for i in range(4)
-            ],
-                                       dim=0)
+            rot_sim_labels = torch.cat(
+                [labels + self.config.dataset.num_classes * i for i in range(4)], dim=0
+            )
 
             images_pair = self.simclr_aug(images_pair)  # simclr augment
             _, features = self.net(images_pair, return_feature=True)
@@ -131,12 +143,17 @@ class CSITrainer:
             simclr_outputs = self.simclr_layer(features)
             simclr = normalize(simclr_outputs)  # normalize
             sim_matrix = get_similarity_matrix(
-                simclr, multi_gpu=self.config.num_gpus > 1)
-            loss_sim = Supervised_NT_xent(
-                sim_matrix,
-                labels=rot_sim_labels,
-                temperature=self.config.temperature,
-                multi_gpu=self.config.num_gpus > 1) * self.config.sim_lambda
+                simclr, multi_gpu=self.config.num_gpus > 1
+            )
+            loss_sim = (
+                Supervised_NT_xent(
+                    sim_matrix,
+                    labels=rot_sim_labels,
+                    temperature=self.config.temperature,
+                    multi_gpu=self.config.num_gpus > 1,
+                )
+                * self.config.sim_lambda
+            )
 
             # total loss
             loss = loss_sim
@@ -150,9 +167,8 @@ class CSITrainer:
 
             # Post-processing stuffs
             penul_1 = features[:batch_size]
-            penul_2 = features[4 * batch_size:5 * batch_size]
-            features = torch.cat([penul_1,
-                                  penul_2])  # only use original rotation
+            penul_2 = features[4 * batch_size : 5 * batch_size]
+            features = torch.cat([penul_1, penul_2])  # only use original rotation
 
             # Linear evaluation
             outputs_linear_eval = self.linear(features.detach())
@@ -165,29 +181,31 @@ class CSITrainer:
             n = n + 1
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = loss
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = loss
 
         if self.config.num_gpus > 1:
-            self.dummy_net.backbone.load_state_dict(
-                self.net.module.state_dict())
-            self.dummy_net.linear.load_state_dict(
-                self.linear.module.state_dict())
+            self.dummy_net.backbone.load_state_dict(self.net.module.state_dict())
+            self.dummy_net.linear.load_state_dict(self.linear.module.state_dict())
             self.dummy_net.simclr_layer.load_state_dict(
-                self.simclr_layer.module.state_dict())
+                self.simclr_layer.module.state_dict()
+            )
             self.dummy_net.joint_distribution_layer.load_state_dict(
-                self.joint_distribution_layer.module.state_dict())
+                self.joint_distribution_layer.module.state_dict()
+            )
             self.dummy_net.shift_cls_layer.load_state_dict(
-                self.shift_cls_layer.module.state_dict())
+                self.shift_cls_layer.module.state_dict()
+            )
         else:
             self.dummy_net.backbone.load_state_dict(self.net.state_dict())
             self.dummy_net.linear.load_state_dict(self.linear.state_dict())
-            self.dummy_net.simclr_layer.load_state_dict(
-                self.simclr_layer.state_dict())
+            self.dummy_net.simclr_layer.load_state_dict(self.simclr_layer.state_dict())
             self.dummy_net.joint_distribution_layer.load_state_dict(
-                self.joint_distribution_layer.state_dict())
+                self.joint_distribution_layer.state_dict()
+            )
             self.dummy_net.shift_cls_layer.load_state_dict(
-                self.shift_cls_layer.state_dict())
+                self.shift_cls_layer.state_dict()
+            )
 
         return self.dummy_net, metrics
 
@@ -195,27 +213,29 @@ class CSITrainer:
         self.net.train()
         train_dataiter = iter(self.train_loader)
 
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True,
-                               disable=not comm.is_main_process()):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             self.net.eval()
             batch = next(train_dataiter)
-            images = batch['data'].cuda()
-            labels = batch['label'].cuda()
+            images = batch["data"].cuda()
+            labels = batch["label"].cuda()
 
             batch_size = images.size(0)
             images = self.hflip(images)
             images = torch.cat(
-                [torch.rot90(images, rot, (2, 3)) for rot in range(4)])  # 4B
+                [torch.rot90(images, rot, (2, 3)) for rot in range(4)]
+            )  # 4B
             rot_labels = torch.cat(
-                [torch.ones_like(labels) * k for k in range(4)], 0)  # B -> 4B
-            joint_labels = torch.cat([
-                labels + self.config.dataset.num_classes * i for i in range(4)
-            ],
-                                     dim=0)
+                [torch.ones_like(labels) * k for k in range(4)], 0
+            )  # B -> 4B
+            joint_labels = torch.cat(
+                [labels + self.config.dataset.num_classes * i for i in range(4)], dim=0
+            )
 
             images = self.simclr_aug(images)  # simclr augmentation
             _, features = self.net(images, return_feature=True)
@@ -254,29 +274,31 @@ class CSITrainer:
         self.joint_scheduler.step()
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = loss_ce + loss_rot + loss_joint
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = loss_ce + loss_rot + loss_joint
 
         if self.config.num_gpus > 1:
-            self.dummy_net.backbone.load_state_dict(
-                self.net.module.state_dict())
-            self.dummy_net.linear.load_state_dict(
-                self.linear.module.state_dict())
+            self.dummy_net.backbone.load_state_dict(self.net.module.state_dict())
+            self.dummy_net.linear.load_state_dict(self.linear.module.state_dict())
             self.dummy_net.simclr_layer.load_state_dict(
-                self.simclr_layer.module.state_dict())
+                self.simclr_layer.module.state_dict()
+            )
             self.dummy_net.joint_distribution_layer.load_state_dict(
-                self.joint_distribution_layer.module.state_dict())
+                self.joint_distribution_layer.module.state_dict()
+            )
             self.dummy_net.shift_cls_layer.load_state_dict(
-                self.shift_cls_layer.module.state_dict())
+                self.shift_cls_layer.module.state_dict()
+            )
         else:
             self.dummy_net.backbone.load_state_dict(self.net.state_dict())
             self.dummy_net.linear.load_state_dict(self.linear.state_dict())
-            self.dummy_net.simclr_layer.load_state_dict(
-                self.simclr_layer.state_dict())
+            self.dummy_net.simclr_layer.load_state_dict(self.simclr_layer.state_dict())
             self.dummy_net.joint_distribution_layer.load_state_dict(
-                self.joint_distribution_layer.state_dict())
+                self.joint_distribution_layer.state_dict()
+            )
             self.dummy_net.shift_cls_layer.load_state_dict(
-                self.shift_cls_layer.state_dict())
+                self.shift_cls_layer.state_dict()
+            )
 
         return self.dummy_net, metrics
 
@@ -291,9 +313,7 @@ def get_similarity_matrix(outputs, chunk=2, multi_gpu=False):
     if multi_gpu:
         outputs_gathered = []
         for out in outputs.chunk(chunk):
-            gather_t = [
-                torch.empty_like(out) for _ in range(dist.get_world_size())
-            ]
+            gather_t = [torch.empty_like(out) for _ in range(dist.get_world_size())]
             gather_t = torch.cat(distops.all_gather(gather_t, out))
             outputs_gathered.append(gather_t)
         outputs = torch.cat(outputs_gathered)
@@ -303,12 +323,9 @@ def get_similarity_matrix(outputs, chunk=2, multi_gpu=False):
     return sim_matrix
 
 
-def Supervised_NT_xent(sim_matrix,
-                       labels,
-                       temperature=0.5,
-                       chunk=2,
-                       eps=1e-8,
-                       multi_gpu=False):
+def Supervised_NT_xent(
+    sim_matrix, labels, temperature=0.5, chunk=2, eps=1e-8, multi_gpu=False
+):
     """Compute NT_xent loss.
 
     - sim_matrix: (B', B') tensor for B' = B * chunk (first 2B are pos samples)
@@ -317,9 +334,7 @@ def Supervised_NT_xent(sim_matrix,
     device = sim_matrix.device
 
     if multi_gpu:
-        gather_t = [
-            torch.empty_like(labels) for _ in range(dist.get_world_size())
-        ]
+        gather_t = [torch.empty_like(labels) for _ in range(dist.get_world_size())]
         labels = torch.cat(distops.all_gather(gather_t, labels))
     labels = labels.repeat(2)
 
@@ -329,8 +344,7 @@ def Supervised_NT_xent(sim_matrix,
     B = sim_matrix.size(0) // chunk  # B = B' / chunk
 
     eye = torch.eye(B * chunk).to(device)  # (B', B')
-    sim_matrix = torch.exp(sim_matrix / temperature) * (1 - eye
-                                                        )  # remove diagonal
+    sim_matrix = torch.exp(sim_matrix / temperature) * (1 - eye)  # remove diagonal
 
     denom = torch.sum(sim_matrix, dim=1, keepdim=True)
     sim_matrix = -torch.log(sim_matrix / (denom + eps) + eps)  # loss matrix
@@ -358,16 +372,14 @@ def get_simclr_augmentation(config, image_size):
         resize_scale = (config.resize_factor, config.resize_factor)
 
     # Align augmentation
-    color_jitter = ColorJitterLayer(brightness=0.4,
-                                    contrast=0.4,
-                                    saturation=0.4,
-                                    hue=0.1,
-                                    p=0.8)
+    color_jitter = ColorJitterLayer(
+        brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1, p=0.8
+    )
     color_gray = RandomColorGrayLayer(p=0.2)
     resize_crop = RandomResizedCropLayer(scale=resize_scale, size=image_size)
 
     # Transform define #
-    if config.dataset.name == 'imagenet':
+    if config.dataset.name == "imagenet":
         # Using RandomResizedCrop at PIL transform
         transform = nn.Sequential(
             color_jitter,
@@ -397,15 +409,11 @@ class GradualWarmupScheduler(_LRScheduler):
         after_scheduler: after target_epoch,
         use this scheduler (eg. ReduceLROnPlateau)
     """
-    def __init__(self,
-                 optimizer,
-                 multiplier,
-                 total_epoch,
-                 after_scheduler=None):
+
+    def __init__(self, optimizer, multiplier, total_epoch, after_scheduler=None):
         self.multiplier = multiplier
-        if self.multiplier < 1.:
-            raise ValueError(
-                'multiplier should be greater than or equal to 1.')
+        if self.multiplier < 1.0:
+            raise ValueError("multiplier should be greater than or equal to 1.")
         self.total_epoch = total_epoch
         self.after_scheduler = after_scheduler
         self.finished = False
@@ -429,9 +437,9 @@ class GradualWarmupScheduler(_LRScheduler):
             ]
         else:
             return [
-                base_lr *
-                ((self.multiplier - 1.) * self.last_epoch / self.total_epoch +
-                 1.) for base_lr in self.base_lrs
+                base_lr
+                * ((self.multiplier - 1.0) * self.last_epoch / self.total_epoch + 1.0)
+                for base_lr in self.base_lrs
             ]
 
     def step_ReduceLROnPlateau(self, metrics, epoch=None):
@@ -442,12 +450,12 @@ class GradualWarmupScheduler(_LRScheduler):
         # whereas others are called at beginning
         if self.last_epoch <= self.total_epoch:
             warmup_lr = [
-                base_lr *
-                ((self.multiplier - 1.) * self.last_epoch / self.total_epoch +
-                 1.) for base_lr in self.base_lrs
+                base_lr
+                * ((self.multiplier - 1.0) * self.last_epoch / self.total_epoch + 1.0)
+                for base_lr in self.base_lrs
             ]
             for param_group, lr in zip(self.optimizer.param_groups, warmup_lr):
-                param_group['lr'] = lr
+                param_group["lr"] = lr
         else:
             if epoch is None:
                 self.after_scheduler.step(metrics, None)
@@ -468,8 +476,8 @@ class GradualWarmupScheduler(_LRScheduler):
 
 
 # ----------transform layers----------
-if torch.__version__ >= '1.4.0':
-    kwargs = {'align_corners': False}
+if torch.__version__ >= "1.4.0":
+    kwargs = {"align_corners": False}
 else:
     kwargs = {}
 
@@ -500,7 +508,7 @@ def rgb2hsv(rgb):
     saturate = delta / Cmax
     value = Cmax
     hsv = torch.stack([hue, saturate, value], dim=1)
-    hsv[~torch.isfinite(hsv)] = 0.
+    hsv[~torch.isfinite(hsv)] = 0.0
     return hsv
 
 
@@ -529,7 +537,7 @@ def hsv2rgb(hsv):
 
 
 class RandomResizedCropLayer(nn.Module):
-    def __init__(self, size=None, scale=(0.08, 1.0), ratio=(3. / 4., 4. / 3.)):
+    def __init__(self, size=None, scale=(0.08, 1.0), ratio=(3.0 / 4.0, 4.0 / 3.0)):
         """Inception Crop size (tuple): size of forwarding image (C, W, H)
         scale (tuple): range of size of the origin size cropped ratio (tuple):
 
@@ -539,7 +547,7 @@ class RandomResizedCropLayer(nn.Module):
 
         _eye = torch.eye(2, 3)
         self.size = size
-        self.register_buffer('_eye', _eye)
+        self.register_buffer("_eye", _eye)
         self.scale = scale
         self.ratio = ratio
 
@@ -557,10 +565,7 @@ class RandomResizedCropLayer(nn.Module):
         _theta[:, 1, 2] = whbias[:, 3]
 
         grid = F.affine_grid(_theta, inputs.size(), **kwargs).to(_device)
-        output = F.grid_sample(inputs,
-                               grid,
-                               padding_mode='reflection',
-                               **kwargs)
+        output = F.grid_sample(inputs, grid, padding_mode="reflection", **kwargs)
 
         if self.size is not None:
             output = F.adaptive_avg_pool2d(output, self.size)
@@ -635,7 +640,7 @@ class HorizontalFlipRandomCrop(nn.Module):
         super(HorizontalFlipRandomCrop, self).__init__()
         self.max_range = max_range
         _eye = torch.eye(2, 3)
-        self.register_buffer('_eye', _eye)
+        self.register_buffer("_eye", _eye)
 
     def forward(self, input, sign=None, bias=None, rotation=None):
         _device = input.device
@@ -645,9 +650,9 @@ class HorizontalFlipRandomCrop(nn.Module):
         if sign is None:
             sign = torch.bernoulli(torch.ones(N, device=_device) * 0.5) * 2 - 1
         if bias is None:
-            bias = torch.empty(
-                (N, 2), device=_device).uniform_(-self.max_range,
-                                                 self.max_range)
+            bias = torch.empty((N, 2), device=_device).uniform_(
+                -self.max_range, self.max_range
+            )
         _theta[:, 0, 0] = sign
         _theta[:, :, 2] = bias
 
@@ -655,17 +660,15 @@ class HorizontalFlipRandomCrop(nn.Module):
             _theta[:, 0:2, 0:2] = rotation
 
         grid = F.affine_grid(_theta, input.size(), **kwargs).to(_device)
-        output = F.grid_sample(input,
-                               grid,
-                               padding_mode='reflection',
-                               **kwargs)
+        output = F.grid_sample(input, grid, padding_mode="reflection", **kwargs)
 
         return output
 
     def _sample_latent(self, N, device=None):
         sign = torch.bernoulli(torch.ones(N, device=device) * 0.5) * 2 - 1
-        bias = torch.empty(
-            (N, 2), device=device).uniform_(-self.max_range, self.max_range)
+        bias = torch.empty((N, 2), device=device).uniform_(
+            -self.max_range, self.max_range
+        )
         return sign, bias
 
 
@@ -684,7 +687,7 @@ class Rotation(nn.Module):
 
             output = torch.rot90(input, aug_index, (2, 3))
 
-            _prob = input.new_full((input.size(0), ), self.prob)
+            _prob = input.new_full((input.size(0),), self.prob)
             _mask = torch.bernoulli(_prob).view(-1, 1, 1, 1)
             output = _mask * input + (1 - _mask) * output
 
@@ -710,7 +713,7 @@ class CutPerm(nn.Module):
 
             output = self._cutperm(input, aug_index)
 
-            _prob = input.new_full((input.size(0), ), self.prob)
+            _prob = input.new_full((input.size(0),), self.prob)
             _mask = torch.bernoulli(_prob).view(-1, 1, 1, 1)
             output = _mask * input + (1 - _mask) * output
 
@@ -731,10 +734,12 @@ class CutPerm(nn.Module):
 
         if jigsaw_h == 1:
             inputs = torch.cat(
-                (inputs[:, :, h_mid:, :], inputs[:, :, 0:h_mid, :]), dim=2)
+                (inputs[:, :, h_mid:, :], inputs[:, :, 0:h_mid, :]), dim=2
+            )
         if jigsaw_v == 1:
             inputs = torch.cat(
-                (inputs[:, :, :, w_mid:], inputs[:, :, :, 0:w_mid]), dim=3)
+                (inputs[:, :, :, w_mid:], inputs[:, :, :, 0:w_mid]), dim=3
+            )
 
         return inputs
 
@@ -750,7 +755,7 @@ class HorizontalFlipLayer(nn.Module):
         super(HorizontalFlipLayer, self).__init__()
 
         _eye = torch.eye(2, 3)
-        self.register_buffer('_eye', _eye)
+        self.register_buffer("_eye", _eye)
 
     def forward(self, inputs):
         _device = inputs.device
@@ -760,10 +765,7 @@ class HorizontalFlipLayer(nn.Module):
         r_sign = torch.bernoulli(torch.ones(N, device=_device) * 0.5) * 2 - 1
         _theta[:, 0, 0] = r_sign
         grid = F.affine_grid(_theta, inputs.size(), **kwargs).to(_device)
-        inputs = F.grid_sample(inputs,
-                               grid,
-                               padding_mode='reflection',
-                               **kwargs)
+        inputs = F.grid_sample(inputs, grid, padding_mode="reflection", **kwargs)
 
         return inputs
 
@@ -774,7 +776,7 @@ class RandomColorGrayLayer(nn.Module):
         self.prob = p
 
         _weight = torch.tensor([[0.299, 0.587, 0.114]])
-        self.register_buffer('_weight', _weight.view(1, 3, 1, 1))
+        self.register_buffer("_weight", _weight.view(1, 3, 1, 1))
 
     def forward(self, inputs, aug_index=None):
 
@@ -785,7 +787,7 @@ class RandomColorGrayLayer(nn.Module):
         gray = torch.cat([outputs, outputs, outputs], dim=1)
 
         if aug_index is None:
-            _prob = inputs.new_full((inputs.size(0), ), self.prob)
+            _prob = inputs.new_full((inputs.size(0),), self.prob)
             _mask = torch.bernoulli(_prob).view(-1, 1, 1, 1)
 
             gray = inputs * (1 - _mask) + gray * _mask
@@ -797,37 +799,33 @@ class ColorJitterLayer(nn.Module):
     def __init__(self, p, brightness, contrast, saturation, hue):
         super(ColorJitterLayer, self).__init__()
         self.prob = p
-        self.brightness = self._check_input(brightness, 'brightness')
-        self.contrast = self._check_input(contrast, 'contrast')
-        self.saturation = self._check_input(saturation, 'saturation')
-        self.hue = self._check_input(hue,
-                                     'hue',
-                                     center=0,
-                                     bound=(-0.5, 0.5),
-                                     clip_first_on_zero=False)
+        self.brightness = self._check_input(brightness, "brightness")
+        self.contrast = self._check_input(contrast, "contrast")
+        self.saturation = self._check_input(saturation, "saturation")
+        self.hue = self._check_input(
+            hue, "hue", center=0, bound=(-0.5, 0.5), clip_first_on_zero=False
+        )
 
-    def _check_input(self,
-                     value,
-                     name,
-                     center=1,
-                     bound=(0, float('inf')),
-                     clip_first_on_zero=True):
+    def _check_input(
+        self, value, name, center=1, bound=(0, float("inf")), clip_first_on_zero=True
+    ):
         if isinstance(value, numbers.Number):
             if value < 0:
                 raise ValueError(
-                    'If {} is a single number, it must be non negative.'.
-                    format(name))
+                    "If {} is a single number, it must be non negative.".format(name)
+                )
             value = [center - value, center + value]
             if clip_first_on_zero:
                 value[0] = max(value[0], 0)
         elif isinstance(value, (tuple, list)) and len(value) == 2:
             if not bound[0] <= value[0] <= value[1] <= bound[1]:
-                raise ValueError('{} values should be between {}'.format(
-                    name, bound))
+                raise ValueError("{} values should be between {}".format(name, bound))
         else:
             raise TypeError(
-                '{} should be a single number or a list/tuple with length 2.'.
-                format(name))
+                "{} should be a single number or a list/tuple with length 2.".format(
+                    name
+                )
+            )
 
         # if value is 0 or (1., 1.) for brightness/contrast/saturation
         # or (0., 0.) for hue, do nothing
@@ -869,7 +867,7 @@ class ColorJitterLayer(nn.Module):
         return inputs
 
     def forward(self, inputs):
-        _prob = inputs.new_full((inputs.size(0), ), self.prob)
+        _prob = inputs.new_full((inputs.size(0),), self.prob)
         _mask = torch.bernoulli(_prob).view(-1, 1, 1, 1)
         return inputs * (1 - _mask) + self.transform(inputs) * _mask
 
@@ -881,8 +879,8 @@ class RandomHSVFunction(Function):
         # for backward computation
         x = rgb2hsv(x)
         h = x[:, 0, :, :]
-        h += (f_h * 255. / 360.)
-        h = (h % 1)
+        h += f_h * 255.0 / 360.0
+        h = h % 1
         x[:, 0, :, :] = h
         x[:, 1, :, :] = x[:, 1, :, :] * f_s
         x[:, 2, :, :] = x[:, 2, :, :] * f_v
@@ -905,6 +903,7 @@ class NormalizeLayer(nn.Module):
     standardized coordinates, we add the Gaussian noise _before_ standardizing,
     which is why we have standardization be the first layer of the classifier
     rather than as a part of preprocessing as is typical."""
+
     def __init__(self):
         super(NormalizeLayer, self).__init__()
 

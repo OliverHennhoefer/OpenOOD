@@ -8,7 +8,7 @@ class T2FNormNet(nn.Module):
         super(T2FNormNet, self).__init__()
         self.backbone = backbone
         self.num_classes = num_classes
-        self.register_buffer('tau', torch.tensor(1.0))
+        self.register_buffer("tau", torch.tensor(1.0))
 
     def set_tau(self, tau):
         self.tau = torch.tensor(tau)

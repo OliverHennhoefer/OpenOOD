@@ -25,16 +25,14 @@ class KNNPostprocessor(BasePostprocessor):
             activation_log = []
             net.eval()
             with torch.no_grad():
-                for batch in tqdm(id_loader_dict['train'],
-                                  desc='Setup: ',
-                                  position=0,
-                                  leave=True):
-                    data = batch['data'].cuda()
+                for batch in tqdm(
+                    id_loader_dict["train"], desc="Setup: ", position=0, leave=True
+                ):
+                    data = batch["data"].cuda()
                     data = data.float()
 
                     _, feature = net(data, return_feature=True)
-                    activation_log.append(
-                        normalizer(feature.data.cpu().numpy()))
+                    activation_log.append(normalizer(feature.data.cpu().numpy()))
 
             self.activation_log = np.concatenate(activation_log, axis=0)
             self.index = faiss.IndexFlatL2(feature.shape[1])

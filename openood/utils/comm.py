@@ -45,10 +45,9 @@ def get_local_rank() -> int:
         return 0
     if not dist.is_initialized():
         return 0
-    assert (
-        _LOCAL_PROCESS_GROUP is not None
-    ), 'Local process group is not created! '\
-        'Please use launch() to spawn processes!'
+    assert _LOCAL_PROCESS_GROUP is not None, (
+        "Local process group is not created! " "Please use launch() to spawn processes!"
+    )
     return dist.get_rank(group=_LOCAL_PROCESS_GROUP)
 
 
@@ -91,8 +90,8 @@ def synchronize():
 def _get_global_gloo_group():
     """Return a process group based on gloo backend, containing all the ranks
     The result is cached."""
-    if dist.get_backend() == 'nccl':
-        return dist.new_group(backend='gloo')
+    if dist.get_backend() == "nccl":
+        return dist.new_group(backend="gloo")
     else:
         return dist.group.WORLD
 
@@ -111,7 +110,8 @@ def all_gather(data, group=None):
     if get_world_size() == 1:
         return [data]
     if group is None:
-        group = _get_global_gloo_group(
+        group = (
+            _get_global_gloo_group()
         )  # use CPU group by default, to reduce GPU RAM usage.
     world_size = dist.get_world_size(group)
     if world_size == 1:

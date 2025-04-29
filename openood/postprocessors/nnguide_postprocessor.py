@@ -43,25 +43,22 @@ class NNGuidePostprocessor(BasePostprocessor):
             bank_feas = []
             bank_logits = []
             with torch.no_grad():
-                for batch in tqdm(id_loader_dict['train'],
-                                  desc='Setup: ',
-                                  position=0,
-                                  leave=True):
-                    data = batch['data'].cuda()
+                for batch in tqdm(
+                    id_loader_dict["train"], desc="Setup: ", position=0, leave=True
+                ):
+                    data = batch["data"].cuda()
                     data = data.float()
 
                     logit, feature = net(data, return_feature=True)
                     bank_feas.append(normalizer(feature.data.cpu().numpy()))
                     bank_logits.append(logit.data.cpu().numpy())
-                    if len(bank_feas
-                           ) * id_loader_dict['train'].batch_size > int(
-                               len(id_loader_dict['train'].dataset) *
-                               self.alpha):
+                    if len(bank_feas) * id_loader_dict["train"].batch_size > int(
+                        len(id_loader_dict["train"].dataset) * self.alpha
+                    ):
                         break
 
             bank_feas = np.concatenate(bank_feas, axis=0)
-            bank_confs = logsumexp(np.concatenate(bank_logits, axis=0),
-                                   axis=-1)
+            bank_confs = logsumexp(np.concatenate(bank_logits, axis=0), axis=-1)
             self.bank_guide = bank_feas * bank_confs[:, None]
 
             self.setup_flag = True

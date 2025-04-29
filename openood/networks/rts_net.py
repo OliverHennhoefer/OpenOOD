@@ -4,9 +4,9 @@ import torch.nn as nn
 
 class RTSNet(nn.Module):
     def __init__(self, backbone, feature_size, num_classes, dof=16):
-        '''
+        """
         dof: degree of freedom of variance
-        '''
+        """
         super(RTSNet, self).__init__()
         self.backbone = backbone
         self.feature_size = feature_size

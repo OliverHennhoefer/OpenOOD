@@ -18,7 +18,7 @@ def prepare_mixup(batch, alpha=1.0, use_cuda=True):
     else:
         lam = 1
 
-    batch_size = batch['data'].size()[0]
+    batch_size = batch["data"].size()[0]
     if use_cuda:
         index = torch.randperm(batch_size).cuda()
     else:
@@ -32,8 +32,9 @@ def mixing(data, index, lam):
 
 
 class MixupTrainer:
-    def __init__(self, net: nn.Module, train_loader: DataLoader,
-                 config: Config) -> None:
+    def __init__(
+        self, net: nn.Module, train_loader: DataLoader, config: Config
+    ) -> None:
 
         self.net = net
         self.train_loader = train_loader
@@ -64,18 +65,19 @@ class MixupTrainer:
         loss_avg = 0.0
         train_dataiter = iter(self.train_loader)
 
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True,
-                               disable=not comm.is_main_process()):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             batch = next(train_dataiter)
 
             # mixup operation
             index, lam = prepare_mixup(batch, self.alpha)
-            data_mix = mixing(batch['data'].cuda(), index, lam)
-            soft_label_mix = mixing(batch['soft_label'].cuda(), index, lam)
+            data_mix = mixing(batch["data"].cuda(), index, lam)
+            soft_label_mix = mixing(batch["soft_label"].cuda(), index, lam)
 
             # forward
             logits_classifier = self.net(data_mix)
@@ -92,7 +94,7 @@ class MixupTrainer:
                 loss_avg = loss_avg * 0.8 + float(loss) * 0.2
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = loss_avg
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = loss_avg
 
         return self.net, metrics

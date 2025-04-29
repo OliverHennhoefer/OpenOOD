@@ -27,7 +27,8 @@ class TestAdPipeline:
         # setup for distance-based methods
         postprocessor.setup(net, id_loader_dict, ood_loader_dict)
 
-        print('Start testing...', flush=True)
-        test_metrics = evaluator.eval_ood(net, id_loader_dict, ood_loader_dict,
-                                          postprocessor)
+        print("Start testing...", flush=True)
+        test_metrics = evaluator.eval_ood(
+            net, id_loader_dict, ood_loader_dict, postprocessor
+        )
         evaluator.report(test_metrics)

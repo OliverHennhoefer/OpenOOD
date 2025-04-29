@@ -21,11 +21,10 @@ class ReactPostprocessor(BasePostprocessor):
             activation_log = []
             net.eval()
             with torch.no_grad():
-                for batch in tqdm(id_loader_dict['val'],
-                                  desc='Setup: ',
-                                  position=0,
-                                  leave=True):
-                    data = batch['data'].cuda()
+                for batch in tqdm(
+                    id_loader_dict["val"], desc="Setup: ", position=0, leave=True
+                ):
+                    data = batch["data"].cuda()
                     data = data.float()
 
                     _, feature = net(data, return_feature=True)
@@ -36,8 +35,7 @@ class ReactPostprocessor(BasePostprocessor):
         else:
             pass
 
-        self.threshold = np.percentile(self.activation_log.flatten(),
-                                       self.percentile)
+        self.threshold = np.percentile(self.activation_log.flatten(), self.percentile)
 
     @torch.no_grad()
     def postprocess(self, net: nn.Module, data: Any):
@@ -49,10 +47,12 @@ class ReactPostprocessor(BasePostprocessor):
 
     def set_hyperparam(self, hyperparam: list):
         self.percentile = hyperparam[0]
-        self.threshold = np.percentile(self.activation_log.flatten(),
-                                       self.percentile)
-        print('Threshold at percentile {:2d} over id data is: {}'.format(
-            self.percentile, self.threshold))
+        self.threshold = np.percentile(self.activation_log.flatten(), self.percentile)
+        print(
+            "Threshold at percentile {:2d} over id data is: {}".format(
+                self.percentile, self.threshold
+            )
+        )
 
     def get_hyperparam(self):
         return self.percentile

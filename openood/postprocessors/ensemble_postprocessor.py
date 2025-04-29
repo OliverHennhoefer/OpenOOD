@@ -14,9 +14,9 @@ class EnsemblePostprocessor(BasePostprocessor):
         self.config = config
         self.postprocess_config = config.postprocessor
         self.postprocessor_args = self.postprocess_config.postprocessor_args
-        assert self.postprocessor_args.network_name == \
-            self.config.network.name,\
-            'checkpoint network type and model type do not align!'
+        assert (
+            self.postprocessor_args.network_name == self.config.network.name
+        ), "checkpoint network type and model type do not align!"
         # get ensemble args
         self.checkpoint_root = self.postprocessor_args.checkpoint_root
 
@@ -26,22 +26,20 @@ class EnsemblePostprocessor(BasePostprocessor):
         self.num_networks = self.postprocessor_args.num_networks
         # get networks
         self.checkpoint_dirs = [
-            osp.join(self.checkpoint_root, path, 'best.ckpt')
+            osp.join(self.checkpoint_root, path, "best.ckpt")
             for path in self.checkpoints
         ]
 
     def setup(self, net: nn.Module, id_loader_dict, ood_loader_dict):
         self.networks = [deepcopy(net) for i in range(self.num_networks)]
         for i in range(self.num_networks):
-            self.networks[i].load_state_dict(torch.load(
-                self.checkpoint_dirs[i]),
-                                             strict=False)
+            self.networks[i].load_state_dict(
+                torch.load(self.checkpoint_dirs[i]), strict=False
+            )
             self.networks[i].eval()
 
     def postprocess(self, net: nn.Module, data: Any):
-        logits_list = [
-            self.networks[i](data) for i in range(self.num_networks)
-        ]
+        logits_list = [self.networks[i](data) for i in range(self.num_networks)]
         logits_mean = torch.zeros_like(logits_list[0], dtype=torch.float32)
         for i in range(self.num_networks):
             logits_mean += logits_list[i]

@@ -33,19 +33,21 @@ class MCDTrainer(BaseTrainer):
         if self.train_unlabeled_loader:
             unlabeled_dataiter = iter(self.train_unlabeled_loader)
 
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True,
-                               disable=not comm.is_main_process()):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             batch = next(train_dataiter)
 
-            data = batch['data'].cuda()
+            data = batch["data"].cuda()
             if epoch_idx < self.epoch_ft:
                 logits1, logits2 = self.net(data, return_double=True)
-                loss = F.cross_entropy(logits1, batch['label'].cuda()) \
-                    + F.cross_entropy(logits2, batch['label'].cuda())
+                loss = F.cross_entropy(
+                    logits1, batch["label"].cuda()
+                ) + F.cross_entropy(logits2, batch["label"].cuda())
 
             elif self.train_unlabeled_loader and epoch_idx >= self.epoch_ft:
                 try:
@@ -56,15 +58,16 @@ class MCDTrainer(BaseTrainer):
 
                 id_bs = data.size(0)
 
-                unlabeled_data = unlabeled_batch['data'].cuda()
+                unlabeled_data = unlabeled_batch["data"].cuda()
                 all_data = torch.cat([data, unlabeled_data])
                 logits1, logits2 = self.net(all_data, return_double=True)
 
                 logits1_id, logits2_id = logits1[:id_bs], logits2[:id_bs]
                 logits1_ood, logits2_ood = logits1[id_bs:], logits2[id_bs:]
 
-                loss = F.cross_entropy(logits1_id, batch['label'].cuda()) \
-                    + F.cross_entropy(logits2_id, batch['label'].cuda())
+                loss = F.cross_entropy(
+                    logits1_id, batch["label"].cuda()
+                ) + F.cross_entropy(logits2_id, batch["label"].cuda())
 
                 ent = torch.mean(entropy(logits1_ood) - entropy(logits2_ood))
                 loss_oe = F.relu(self.margin - ent)
@@ -82,8 +85,8 @@ class MCDTrainer(BaseTrainer):
                 loss_avg = loss_avg * 0.8 + float(loss) * 0.2
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = self.save_metrics(loss_avg)
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = self.save_metrics(loss_avg)
 
         return self.net, metrics
 

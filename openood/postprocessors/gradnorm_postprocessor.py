@@ -27,11 +27,10 @@ class GradNormPostprocessor(BasePostprocessor):
         for i in x:
             fc.zero_grad()
             loss = torch.mean(
-                torch.sum(-targets * F.log_softmax(fc(i[None]), dim=-1),
-                          dim=-1))
+                torch.sum(-targets * F.log_softmax(fc(i[None]), dim=-1), dim=-1)
+            )
             loss.backward()
-            layer_grad_norm = torch.sum(torch.abs(
-                fc.weight.grad.data)).cpu().numpy()
+            layer_grad_norm = torch.sum(torch.abs(fc.weight.grad.data)).cpu().numpy()
             confs.append(layer_grad_norm)
 
         return np.array(confs)

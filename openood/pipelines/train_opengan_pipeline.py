@@ -25,10 +25,10 @@ class TrainOpenGanPipeline:
         # get dataloader
         dataloaders = get_feature_opengan_dataloader(self.config.dataset)
         id_loaders = {
-            'train': dataloaders['id_train'],
-            'val': dataloaders['id_val']
+            "train": dataloaders["id_train"],
+            "val": dataloaders["id_val"],
         }  # just for consistency with evaluator
-        ood_loaders = {'val': dataloaders['ood_val']}
+        ood_loaders = {"val": dataloaders["ood_val"]}
 
         # init network
         net = get_network(self.config.network)
@@ -36,8 +36,9 @@ class TrainOpenGanPipeline:
             net = torch.nn.SyncBatchNorm.convert_sync_batchnorm(net)
 
         # init trainer
-        trainer = get_trainer(net, dataloaders['id_train'],
-                              dataloaders['id_val'], self.config)
+        trainer = get_trainer(
+            net, dataloaders["id_train"], dataloaders["id_val"], self.config
+        )
         evaluator = get_evaluator(self.config)
 
         # init recorder
@@ -46,19 +47,22 @@ class TrainOpenGanPipeline:
         # init ood postprocessor
         postprocessor = get_postprocessor(self.config)
 
-        print('Start training...', flush=True)
+        print("Start training...", flush=True)
         for epoch_idx in range(1, self.config.optimizer.num_epochs + 1):
-            if isinstance(dataloaders['id_train'].sampler,
-                          torch.utils.data.distributed.DistributedSampler):
-                dataloaders['id_train'].sampler.set_epoch(epoch_idx - 1)
+            if isinstance(
+                dataloaders["id_train"].sampler,
+                torch.utils.data.distributed.DistributedSampler,
+            ):
+                dataloaders["id_train"].sampler.set_epoch(epoch_idx - 1)
 
             # train the model
             net, train_metrics = trainer.train_epoch(epoch_idx)
-            val_metrics = evaluator.eval_ood_val(net, id_loaders, ood_loaders,
-                                                 postprocessor)
-            val_metrics['epoch_idx'] = train_metrics['epoch_idx']
+            val_metrics = evaluator.eval_ood_val(
+                net, id_loaders, ood_loaders, postprocessor
+            )
+            val_metrics["epoch_idx"] = train_metrics["epoch_idx"]
             recorder.save_model(net, val_metrics)
             recorder.report(train_metrics, val_metrics)
         recorder.summary()
 
-        print('Completed!', flush=True)
+        print("Completed!", flush=True)

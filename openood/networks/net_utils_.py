@@ -37,143 +37,163 @@ def get_network(network_config):
 
     num_classes = network_config.num_classes
 
-    if network_config.name == 'resnet18_32x32':
+    if network_config.name == "resnet18_32x32":
         net = ResNet18_32x32(num_classes=num_classes)
 
-    if network_config.name == 'resnet18_32x32_changed':
+    if network_config.name == "resnet18_32x32_changed":
         net = ResNet18_256x256(num_classes=num_classes)
 
-    elif network_config.name == 'resnet18_64x64':
+    elif network_config.name == "resnet18_64x64":
         net = ResNet18_64x64(num_classes=num_classes)
 
-    elif network_config.name == 'resnet18_224x224':
+    elif network_config.name == "resnet18_224x224":
         net = ResNet18_224x224(num_classes=num_classes)
 
-    elif network_config.name == 'resnet50':
+    elif network_config.name == "resnet50":
         net = ResNet50(num_classes=num_classes)
 
-    elif network_config.name == 'lenet':
+    elif network_config.name == "lenet":
         net = LeNet(num_classes=num_classes, num_channel=3)
 
-    elif network_config.name == 'wrn':
-        net = WideResNet(depth=28,
-                         widen_factor=10,
-                         dropRate=0.0,
-                         num_classes=num_classes)
+    elif network_config.name == "wrn":
+        net = WideResNet(
+            depth=28, widen_factor=10, dropRate=0.0, num_classes=num_classes
+        )
 
-    elif network_config.name == 'densenet':
-        net = DenseNet3(depth=100,
-                        growth_rate=12,
-                        reduction=0.5,
-                        bottleneck=True,
-                        dropRate=0.0,
-                        num_classes=num_classes)
+    elif network_config.name == "densenet":
+        net = DenseNet3(
+            depth=100,
+            growth_rate=12,
+            reduction=0.5,
+            bottleneck=True,
+            dropRate=0.0,
+            num_classes=num_classes,
+        )
 
-    elif network_config.name == 'patchcore_net':
+    elif network_config.name == "patchcore_net":
         # path = '/home/pengyunwang/.cache/torch/hub/vision-0.9.0'
         # module = torch.hub._load_local(path,
         #                                'wide_resnet50_2',
         #                                pretrained=True)
         backbone = get_network(network_config.backbone)
         net = PatchcoreNet(backbone)
-    elif network_config.name == 'wide_resnet_50_2':
-        module = torch.hub.load('pytorch/vision:v0.9.0',
-                                'wide_resnet50_2',
-                                pretrained=True)
+    elif network_config.name == "wide_resnet_50_2":
+        module = torch.hub.load(
+            "pytorch/vision:v0.9.0", "wide_resnet50_2", pretrained=True
+        )
         net = PatchcoreNet(module)
 
-    elif network_config.name == 'godin_net':
+    elif network_config.name == "godin_net":
         backbone = get_network(network_config.backbone)
-        net = GodinNet(backbone=backbone,
-                       feature_size=backbone.feature_size,
-                       num_classes=num_classes,
-                       similarity_measure=network_config.similarity_measure)
+        net = GodinNet(
+            backbone=backbone,
+            feature_size=backbone.feature_size,
+            num_classes=num_classes,
+            similarity_measure=network_config.similarity_measure,
+        )
 
-    elif network_config.name == 'react_net':
+    elif network_config.name == "react_net":
         backbone = get_network(network_config.backbone)
         net = ReactNet(backbone)
 
-    elif network_config.name == 'csi_net':
+    elif network_config.name == "csi_net":
         backbone = get_network(network_config.backbone)
-        net = CSINet(backbone,
-                     feature_size=backbone.feature_size,
-                     num_classes=num_classes,
-                     simclr_dim=network_config.simclr_dim,
-                     shift_trans_type=network_config.shift_trans_type)
+        net = CSINet(
+            backbone,
+            feature_size=backbone.feature_size,
+            num_classes=num_classes,
+            simclr_dim=network_config.simclr_dim,
+            shift_trans_type=network_config.shift_trans_type,
+        )
 
-    elif network_config.name == 'draem':
-        model = ReconstructiveSubNetwork(in_channels=3,
-                                         out_channels=3,
-                                         base_width=int(
-                                             network_config.image_size / 2))
+    elif network_config.name == "draem":
+        model = ReconstructiveSubNetwork(
+            in_channels=3, out_channels=3, base_width=int(network_config.image_size / 2)
+        )
         model_seg = DiscriminativeSubNetwork(
             in_channels=6,
             out_channels=2,
-            base_channels=int(network_config.image_size / 4))
+            base_channels=int(network_config.image_size / 4),
+        )
 
-        net = {'generative': model, 'discriminative': model_seg}
+        net = {"generative": model, "discriminative": model_seg}
 
-    elif network_config.name == 'openmax_network':
+    elif network_config.name == "openmax_network":
         backbone = get_network(network_config.backbone)
         net = OpenMax(backbone=backbone, num_classes=num_classes)
 
-    elif network_config.name == 'mcd':
+    elif network_config.name == "mcd":
         backbone = get_network(network_config.backbone)
         net = MCDNet(backbone=backbone, num_classes=num_classes)
 
-    elif network_config.name == 'udg':
+    elif network_config.name == "udg":
         backbone = get_network(network_config.backbone)
-        net = UDGNet(backbone=backbone,
-                     num_classes=num_classes,
-                     num_clusters=network_config.num_clusters)
+        net = UDGNet(
+            backbone=backbone,
+            num_classes=num_classes,
+            num_clusters=network_config.num_clusters,
+        )
 
-    elif network_config.name == 'opengan':
+    elif network_config.name == "opengan":
         from .opengan import Discriminator, Generator
+
         backbone = get_network(network_config.backbone)
-        netG = Generator(in_channels=network_config.nz,
-                         feature_size=network_config.ngf,
-                         out_channels=network_config.nc)
-        netD = Discriminator(in_channels=network_config.nc,
-                             feature_size=network_config.ndf)
+        netG = Generator(
+            in_channels=network_config.nz,
+            feature_size=network_config.ngf,
+            out_channels=network_config.nc,
+        )
+        netD = Discriminator(
+            in_channels=network_config.nc, feature_size=network_config.ndf
+        )
 
-        net = {'netG': netG, 'netD': netD, 'backbone': backbone}
+        net = {"netG": netG, "netD": netD, "backbone": backbone}
 
-    elif network_config.name == 'arpl_gan':
-        from .arpl_net import (resnet34ABN, Generator, Discriminator,
-                               Generator32, Discriminator32, ARPLayer)
+    elif network_config.name == "arpl_gan":
+        from .arpl_net import (
+            resnet34ABN,
+            Generator,
+            Discriminator,
+            Generator32,
+            Discriminator32,
+            ARPLayer,
+        )
+
         feature_net = resnet34ABN(num_classes=num_classes, num_bns=2)
         dim_centers = feature_net.fc.weight.shape[1]
         feature_net.fc = nn.Identity()
 
-        criterion = ARPLayer(feat_dim=dim_centers,
-                             num_classes=num_classes,
-                             weight_pl=network_config.weight_pl,
-                             temp=network_config.temp)
+        criterion = ARPLayer(
+            feat_dim=dim_centers,
+            num_classes=num_classes,
+            weight_pl=network_config.weight_pl,
+            temp=network_config.temp,
+        )
 
-        assert network_config.image_size == 32 \
-            or network_config.image_size == 64, \
-            'ARPL-GAN only supports 32x32 or 64x64 images!'
+        assert (
+            network_config.image_size == 32 or network_config.image_size == 64
+        ), "ARPL-GAN only supports 32x32 or 64x64 images!"
 
         if network_config.image_size == 64:
-            netG = Generator(1, network_config.nz, network_config.ngf,
-                             network_config.nc)  # ngpu, nz, ngf, nc
-            netD = Discriminator(1, network_config.nc,
-                                 network_config.ndf)  # ngpu, nc, ndf
+            netG = Generator(
+                1, network_config.nz, network_config.ngf, network_config.nc
+            )  # ngpu, nz, ngf, nc
+            netD = Discriminator(
+                1, network_config.nc, network_config.ndf
+            )  # ngpu, nc, ndf
         else:
-            netG = Generator32(1, network_config.nz, network_config.ngf,
-                               network_config.nc)  # ngpu, nz, ngf, nc
-            netD = Discriminator32(1, network_config.nc,
-                                   network_config.ndf)  # ngpu, nc, ndf
+            netG = Generator32(
+                1, network_config.nz, network_config.ngf, network_config.nc
+            )  # ngpu, nz, ngf, nc
+            netD = Discriminator32(
+                1, network_config.nc, network_config.ndf
+            )  # ngpu, nc, ndf
 
-        net = {
-            'netF': feature_net,
-            'criterion': criterion,
-            'netG': netG,
-            'netD': netD
-        }
+        net = {"netF": feature_net, "criterion": criterion, "netG": netG, "netD": netD}
 
-    elif network_config.name == 'arpl_net':
+    elif network_config.name == "arpl_net":
         from .arpl_net import ARPLayer
+
         feature_net = get_network(network_config.feat_extract_network)
         try:
             dim_centers = feature_net.fc.weight.shape[1]
@@ -182,85 +202,87 @@ def get_network(network_config):
             dim_centers = feature_net.classifier[0].weight.shape[1]
             feature_net.classifier = nn.Identity()
 
-        criterion = ARPLayer(feat_dim=dim_centers,
-                             num_classes=num_classes,
-                             weight_pl=network_config.weight_pl,
-                             temp=network_config.temp)
+        criterion = ARPLayer(
+            feat_dim=dim_centers,
+            num_classes=num_classes,
+            weight_pl=network_config.weight_pl,
+            temp=network_config.temp,
+        )
 
-        net = {'netF': feature_net, 'criterion': criterion}
+        net = {"netF": feature_net, "criterion": criterion}
 
-    elif network_config.name == 'bit':
+    elif network_config.name == "bit":
         net = KNOWN_MODELS[network_config.model](
             head_size=network_config.num_logits,
             zero_head=True,
-            num_block_open=network_config.num_block_open)
+            num_block_open=network_config.num_block_open,
+        )
 
-    elif network_config.name == 'vit':
+    elif network_config.name == "vit":
         cfg = mmcv.Config.fromfile(network_config.model)
         net = init_model(cfg, network_config.checkpoint, 0)
         net.get_fc = MethodType(
-            lambda self: (self.head.layers.head.weight.cpu().numpy(),
-                          self.head.layers.head.bias.cpu().numpy()), net)
+            lambda self: (
+                self.head.layers.head.weight.cpu().numpy(),
+                self.head.layers.head.bias.cpu().numpy(),
+            ),
+            net,
+        )
 
-    elif network_config.name == 'conf_branch_net':
+    elif network_config.name == "conf_branch_net":
 
         backbone = get_network(network_config.backbone)
         net = ConfBranchNet(backbone=backbone, num_classes=num_classes)
 
-    elif network_config.name == 'dsvdd':
+    elif network_config.name == "dsvdd":
         net = build_network(network_config.type)
 
-    elif network_config.name == 'projectionNet':
+    elif network_config.name == "projectionNet":
         backbone = get_network(network_config.backbone)
         net = ProjectionNet(backbone=backbone, num_classes=2)
 
-    elif network_config.name == 'dropout_net':
+    elif network_config.name == "dropout_net":
         backbone = get_network(network_config.backbone)
         net = DropoutNet(backbone=backbone, dropout_p=network_config.dropout_p)
 
-    elif network_config.name == 'rd4ad_net':
+    elif network_config.name == "rd4ad_net":
         encoder = get_network(network_config.backbone)
         bn = BN_layer(AttnBasicBlock, 2)
         decoder = De_ResNet18_256x256()
-        net = {'encoder': encoder, 'bn': bn, 'decoder': decoder}
+        net = {"encoder": encoder, "bn": bn, "decoder": decoder}
     else:
-        raise Exception('Unexpected Network Architecture!')
+        raise Exception("Unexpected Network Architecture!")
 
     if network_config.pretrained:
         if type(net) is dict:
-            for subnet, checkpoint in zip(net.values(),
-                                          network_config.checkpoint):
+            for subnet, checkpoint in zip(net.values(), network_config.checkpoint):
                 if checkpoint is not None:
-                    if checkpoint != 'none':
-                        subnet.load_state_dict(torch.load(checkpoint),
-                                               strict=False)
-        elif network_config.name == 'bit' and not network_config.normal_load:
+                    if checkpoint != "none":
+                        subnet.load_state_dict(torch.load(checkpoint), strict=False)
+        elif network_config.name == "bit" and not network_config.normal_load:
             net.load_from(np.load(network_config.checkpoint))
-        elif network_config.name == 'vit':
+        elif network_config.name == "vit":
             pass
         else:
             try:
-                net.load_state_dict(torch.load(network_config.checkpoint),
-                                    strict=False)
+                net.load_state_dict(torch.load(network_config.checkpoint), strict=False)
             except RuntimeError:
                 # sometimes fc should not be loaded
                 loaded_pth = torch.load(network_config.checkpoint)
-                loaded_pth.pop('fc.weight')
-                loaded_pth.pop('fc.bias')
+                loaded_pth.pop("fc.weight")
+                loaded_pth.pop("fc.bias")
                 net.load_state_dict(loaded_pth, strict=False)
-        print('Model Loading {} Completed!'.format(network_config.name))
+        print("Model Loading {} Completed!".format(network_config.name))
     if network_config.num_gpus > 1:
         if type(net) is dict:
             for key, subnet in zip(net.keys(), net.values()):
                 net[key] = torch.nn.parallel.DistributedDataParallel(
-                    subnet,
-                    device_ids=[comm.get_local_rank()],
-                    broadcast_buffers=True)
+                    subnet, device_ids=[comm.get_local_rank()], broadcast_buffers=True
+                )
         else:
             net = torch.nn.parallel.DistributedDataParallel(
-                net.cuda(),
-                device_ids=[comm.get_local_rank()],
-                broadcast_buffers=True)
+                net.cuda(), device_ids=[comm.get_local_rank()], broadcast_buffers=True
+            )
 
     if network_config.num_gpus > 0:
         if type(net) is dict:

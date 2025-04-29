@@ -14,4 +14,4 @@ class FeatDataset(Dataset):
     def __getitem__(self, idx):
         data = self.data[idx]
         label = self.labels[idx]
-        return {'data': data, 'label': label}
+        return {"data": data, "label": label}

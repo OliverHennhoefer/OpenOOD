@@ -13,7 +13,7 @@ class ASCOODNet(nn.Module):
     def __init__(self, backbone):
         super(ASCOODNet, self).__init__()
         self.backbone = backbone
-        self.register_buffer('sigma', torch.tensor(1.0))
+        self.register_buffer("sigma", torch.tensor(1.0))
         self.feature_size = backbone.feature_size
 
     def set_params(self, sigma):

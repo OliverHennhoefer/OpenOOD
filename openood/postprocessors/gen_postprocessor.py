@@ -32,7 +32,6 @@ class GENPostprocessor(BasePostprocessor):
     def generalized_entropy(self, softmax_id_val, gamma=0.1, M=100):
         probs = softmax_id_val
         probs_sorted = torch.sort(probs, dim=1)[0][:, -M:]
-        scores = torch.sum(probs_sorted**gamma * (1 - probs_sorted)**(gamma),
-                           dim=1)
+        scores = torch.sum(probs_sorted**gamma * (1 - probs_sorted) ** (gamma), dim=1)
 
         return -scores

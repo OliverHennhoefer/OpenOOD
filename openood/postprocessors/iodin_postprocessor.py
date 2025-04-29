@@ -40,9 +40,7 @@ class IODINPostprocessor(ODINPostprocessor):
         gradient[:, 1] = (gradient[:, 1]) / self.input_std[1]
         gradient[:, 2] = (gradient[:, 2]) / self.input_std[2]
 
-        tempInputs = torch.add(data.detach(),
-                               gradient * mask,
-                               alpha=-self.noise)
+        tempInputs = torch.add(data.detach(), gradient * mask, alpha=-self.noise)
         output = net(tempInputs)
         output = output / self.temperature
 

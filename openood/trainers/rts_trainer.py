@@ -10,8 +10,9 @@ from .lr_scheduler import cosine_annealing
 
 
 class RTSTrainer:
-    def __init__(self, net: nn.Module, train_loader: DataLoader,
-                 config: Config) -> None:
+    def __init__(
+        self, net: nn.Module, train_loader: DataLoader, config: Config
+    ) -> None:
 
         self.net = net
         self.train_loader = train_loader
@@ -41,33 +42,32 @@ class RTSTrainer:
         loss_avg = 0.0
         train_dataiter = iter(self.train_loader)
 
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+        ):
             batch = next(train_dataiter)
-            data = batch['data'].cuda()
-            target = batch['label'].cuda()
+            data = batch["data"].cuda()
+            target = batch["label"].cuda()
 
             # forward
             logits_classifier, variance = self.net(data, return_var=True)
             epsilon = torch.randn_like(variance)
             temperature = torch.sum(
-                variance * epsilon * epsilon, dim=1,
-                keepdim=True) / (self.config.network.dof - 2)
-            loss_kl = ((variance - torch.log(variance + 1e-8) - 1) *
-                       0.5).mean()
-            loss_head = F.cross_entropy(logits_classifier / temperature,
-                                        target)
+                variance * epsilon * epsilon, dim=1, keepdim=True
+            ) / (self.config.network.dof - 2)
+            loss_kl = ((variance - torch.log(variance + 1e-8) - 1) * 0.5).mean()
+            loss_head = F.cross_entropy(logits_classifier / temperature, target)
             loss = loss_head + self.config.network.kl_scale * loss_kl
 
             # backward
             self.optimizer.zero_grad()
             loss.backward()
-            nn.utils.clip_grad_norm_(parameters=self.net.parameters(),
-                                     max_norm=2.5,
-                                     norm_type=2)
+            nn.utils.clip_grad_norm_(
+                parameters=self.net.parameters(), max_norm=2.5, norm_type=2
+            )
             self.optimizer.step()
             self.scheduler.step()
 
@@ -76,7 +76,7 @@ class RTSTrainer:
                 loss_avg = loss_avg * 0.8 + float(loss) * 0.2
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = loss_avg
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = loss_avg
 
         return self.net, metrics

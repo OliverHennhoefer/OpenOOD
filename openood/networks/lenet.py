@@ -11,21 +11,27 @@ class LeNet(nn.Module):
         self.num_classes = num_classes
         self.feature_size = 84
         self.block1 = nn.Sequential(
-            nn.Conv2d(in_channels=num_channel,
-                      out_channels=6,
-                      kernel_size=5,
-                      stride=1,
-                      padding=2), nn.ReLU(), nn.MaxPool2d(kernel_size=2))
+            nn.Conv2d(
+                in_channels=num_channel,
+                out_channels=6,
+                kernel_size=5,
+                stride=1,
+                padding=2,
+            ),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+        )
 
         self.block2 = nn.Sequential(
             nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5, stride=1),
-            nn.ReLU(), nn.MaxPool2d(kernel_size=2))
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+        )
 
         self.block3 = nn.Sequential(
-            nn.Conv2d(in_channels=16,
-                      out_channels=120,
-                      kernel_size=5,
-                      stride=1), nn.ReLU())
+            nn.Conv2d(in_channels=16, out_channels=120, kernel_size=5, stride=1),
+            nn.ReLU(),
+        )
 
         self.classifier1 = nn.Linear(in_features=120, out_features=84)
         self.relu = nn.ReLU()

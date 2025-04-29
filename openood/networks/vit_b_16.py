@@ -3,21 +3,25 @@ from torchvision.models.vision_transformer import VisionTransformer
 
 
 class ViT_B_16(VisionTransformer):
-    def __init__(self,
-                 image_size=224,
-                 patch_size=16,
-                 num_layers=12,
-                 num_heads=12,
-                 hidden_dim=768,
-                 mlp_dim=3072,
-                 num_classes=1000):
-        super(ViT_B_16, self).__init__(image_size=image_size,
-                                       patch_size=patch_size,
-                                       num_layers=num_layers,
-                                       num_heads=num_heads,
-                                       hidden_dim=hidden_dim,
-                                       mlp_dim=mlp_dim,
-                                       num_classes=num_classes)
+    def __init__(
+        self,
+        image_size=224,
+        patch_size=16,
+        num_layers=12,
+        num_heads=12,
+        hidden_dim=768,
+        mlp_dim=3072,
+        num_classes=1000,
+    ):
+        super(ViT_B_16, self).__init__(
+            image_size=image_size,
+            patch_size=patch_size,
+            num_layers=num_layers,
+            num_heads=num_heads,
+            hidden_dim=hidden_dim,
+            mlp_dim=mlp_dim,
+            num_classes=num_classes,
+        )
         self.feature_size = hidden_dim
 
     def forward(self, x, return_feature=False):

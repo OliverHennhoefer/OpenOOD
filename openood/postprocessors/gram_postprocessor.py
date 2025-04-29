@@ -26,15 +26,16 @@ class GRAMPostprocessor(BasePostprocessor):
     def setup(self, net: nn.Module, id_loader_dict, ood_loader_dict):
         if not self.setup_flag:
             self.feature_min, self.feature_max = sample_estimator(
-                net, id_loader_dict['train'], self.num_classes, self.powers)
+                net, id_loader_dict["train"], self.num_classes, self.powers
+            )
             self.setup_flag = True
         else:
             pass
 
     def postprocess(self, net: nn.Module, data: Any):
-        preds, deviations = get_deviations(net, data, self.feature_min,
-                                           self.feature_max, self.num_classes,
-                                           self.powers)
+        preds, deviations = get_deviations(
+            net, data, self.feature_min, self.feature_max, self.num_classes, self.powers
+        )
         return preds, deviations
 
     def set_hyperparam(self, hyperparam: list):
@@ -56,18 +57,24 @@ def sample_estimator(model, train_loader, num_classes, powers):
     num_layer = 5  # 4 for lenet
     num_poles_list = powers
     num_poles = len(num_poles_list)
-    feature_class = [[[None for x in range(num_poles)]
-                      for y in range(num_layer)] for z in range(num_classes)]
+    feature_class = [
+        [[None for x in range(num_poles)] for y in range(num_layer)]
+        for z in range(num_classes)
+    ]
     label_list = []
-    mins = [[[None for x in range(num_poles)] for y in range(num_layer)]
-            for z in range(num_classes)]
-    maxs = [[[None for x in range(num_poles)] for y in range(num_layer)]
-            for z in range(num_classes)]
+    mins = [
+        [[None for x in range(num_poles)] for y in range(num_layer)]
+        for z in range(num_classes)
+    ]
+    maxs = [
+        [[None for x in range(num_poles)] for y in range(num_layer)]
+        for z in range(num_classes)
+    ]
 
     # collect features and compute gram metrix
-    for batch in tqdm(train_loader, desc='Compute min/max'):
-        data = batch['data'].cuda()
-        label = batch['label']
+    for batch in tqdm(train_loader, desc="Compute min/max"):
+        data = batch["data"].cuda()
+        label = batch["label"]
         _, feature_list = model(data, return_feature_list=True)
         label_list = tensor2list(label)
         for layer_idx in range(num_layer):
@@ -77,26 +84,26 @@ def sample_estimator(model, train_loader, num_classes, powers):
 
                 temp = temp**p
                 temp = temp.reshape(temp.shape[0], temp.shape[1], -1)
-                temp = ((torch.matmul(temp,
-                                      temp.transpose(dim0=2,
-                                                     dim1=1)))).sum(dim=2)
-                temp = (temp.sign() * torch.abs(temp)**(1 / p)).reshape(
-                    temp.shape[0], -1)
+                temp = ((torch.matmul(temp, temp.transpose(dim0=2, dim1=1)))).sum(dim=2)
+                temp = (temp.sign() * torch.abs(temp) ** (1 / p)).reshape(
+                    temp.shape[0], -1
+                )
 
                 temp = tensor2list(temp)
                 for feature, label in zip(temp, label_list):
-                    if isinstance(feature_class[label][layer_idx][pole_idx],
-                                  type(None)):
+                    if isinstance(
+                        feature_class[label][layer_idx][pole_idx], type(None)
+                    ):
                         feature_class[label][layer_idx][pole_idx] = feature
                     else:
-                        feature_class[label][layer_idx][pole_idx].extend(
-                            feature)
+                        feature_class[label][layer_idx][pole_idx].extend(feature)
     # compute mins/maxs
     for label in range(num_classes):
         for layer_idx in range(num_layer):
             for poles_idx in range(num_poles):
                 feature = torch.tensor(
-                    np.array(feature_class[label][layer_idx][poles_idx]))
+                    np.array(feature_class[label][layer_idx][poles_idx])
+                )
                 current_min = feature.min(dim=0, keepdim=True)[0]
                 current_max = feature.max(dim=0, keepdim=True)[0]
 
@@ -105,9 +112,11 @@ def sample_estimator(model, train_loader, num_classes, powers):
                     maxs[label][layer_idx][poles_idx] = current_max
                 else:
                     mins[label][layer_idx][poles_idx] = torch.min(
-                        current_min, mins[label][layer_idx][poles_idx])
+                        current_min, mins[label][layer_idx][poles_idx]
+                    )
                     maxs[label][layer_idx][poles_idx] = torch.max(
-                        current_min, maxs[label][layer_idx][poles_idx])
+                        current_min, maxs[label][layer_idx][poles_idx]
+                    )
 
     return mins, maxs
 
@@ -146,22 +155,20 @@ def get_deviations(model, data, mins, maxs, num_classes, powers):
             temp = feature_list[layer_idx].detach()
             temp = temp**p
             temp = temp.reshape(temp.shape[0], temp.shape[1], -1)
-            temp = ((torch.matmul(temp, temp.transpose(dim0=2,
-                                                       dim1=1)))).sum(dim=2)
-            temp = (temp.sign() * torch.abs(temp)**(1 / p)).reshape(
-                temp.shape[0], -1)
+            temp = ((torch.matmul(temp, temp.transpose(dim0=2, dim1=1)))).sum(dim=2)
+            temp = (temp.sign() * torch.abs(temp) ** (1 / p)).reshape(temp.shape[0], -1)
             temp = tensor2list(temp)
 
             # compute the deviations with train data
             for idx in range(len(temp)):
-                dev[idx] += (F.relu(mins[preds[idx]][layer_idx][pole_idx] -
-                                    sum(temp[idx])) /
-                             torch.abs(mins[preds[idx]][layer_idx][pole_idx] +
-                                       10**-6)).sum()
-                dev[idx] += (F.relu(
-                    sum(temp[idx]) - maxs[preds[idx]][layer_idx][pole_idx]) /
-                             torch.abs(maxs[preds[idx]][layer_idx][pole_idx] +
-                                       10**-6)).sum()
+                dev[idx] += (
+                    F.relu(mins[preds[idx]][layer_idx][pole_idx] - sum(temp[idx]))
+                    / torch.abs(mins[preds[idx]][layer_idx][pole_idx] + 10**-6)
+                ).sum()
+                dev[idx] += (
+                    F.relu(sum(temp[idx]) - maxs[preds[idx]][layer_idx][pole_idx])
+                    / torch.abs(maxs[preds[idx]][layer_idx][pole_idx] + 10**-6)
+                ).sum()
     conf = [i / 50 for i in dev]
 
     return preds, torch.tensor(conf)

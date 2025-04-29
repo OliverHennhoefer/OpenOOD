@@ -1,4 +1,5 @@
 """Adapted from: https://github.com/facebookresearch/odin."""
+
 from typing import Any
 
 import torch

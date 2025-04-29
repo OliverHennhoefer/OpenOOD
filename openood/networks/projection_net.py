@@ -3,10 +3,12 @@ from torchvision.models import resnet18
 
 
 class ProjectionNet(nn.Module):
-    def __init__(self,
-                 backbone,
-                 head_layers=[512, 512, 512, 512, 512, 512, 512, 512, 128],
-                 num_classes=2):
+    def __init__(
+        self,
+        backbone,
+        head_layers=[512, 512, 512, 512, 512, 512, 512, 512, 128],
+        num_classes=2,
+    ):
         super(ProjectionNet, self).__init__()
         self.backbone = backbone
 

@@ -35,8 +35,9 @@ class UDGTrainer(BaseTrainer):
         self.lambda_aux = config.trainer.lambda_aux
 
         # Init clustering algorithm
-        self.k_means = KMeans(k=config.trainer.num_clusters,
-                              pca_dim=config.trainer.pca_dim)
+        self.k_means = KMeans(
+            k=config.trainer.num_clusters, pca_dim=config.trainer.pca_dim
+        )
 
     def train_epoch(self, epoch_idx):
         self._run_clustering(epoch_idx)
@@ -50,41 +51,43 @@ class UDGTrainer(BaseTrainer):
         loss_avg, loss_cls_avg, loss_oe_avg, loss_aux_avg = 0.0, 0.0, 0.0, 0.0
         train_dataiter = iter(self.train_loader)
         unlabeled_dataiter = iter(self.train_unlabeled_loader)
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True,
-                               disable=not comm.is_main_process()):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             batch = next(train_dataiter)
             try:
                 unlabeled_batch = next(unlabeled_dataiter)
             except StopIteration:
                 unlabeled_dataiter = iter(self.train_unlabeled_loader)
                 unlabeled_batch = next(unlabeled_dataiter)
-            data = batch['data'].cuda()
-            unlabeled_data = unlabeled_batch['data'].cuda()
+            data = batch["data"].cuda()
+            unlabeled_data = unlabeled_batch["data"].cuda()
 
             # concat labeled and unlabeled data
             logits_cls, logits_aux = self.net(data, return_aux=True)
-            logits_oe_cls, logits_oe_aux = self.net(unlabeled_data,
-                                                    return_aux=True)
+            logits_oe_cls, logits_oe_aux = self.net(unlabeled_data, return_aux=True)
 
             # classification loss
             concat_logits_cls = torch.cat([logits_cls, logits_oe_cls])
-            concat_label = torch.cat([
-                batch['label'],
-                unlabeled_batch['pseudo_label'].type_as(batch['label']),
-            ])
+            concat_label = torch.cat(
+                [
+                    batch["label"],
+                    unlabeled_batch["pseudo_label"].type_as(batch["label"]),
+                ]
+            )
             loss_cls = F.cross_entropy(
                 concat_logits_cls[concat_label != -1],
                 concat_label[concat_label != -1].cuda(),
             )
             # oe loss
             concat_softlabel = torch.cat(
-                [batch['soft_label'], unlabeled_batch['pseudo_softlabel']])
-            concat_conf = torch.cat(
-                [batch['ood_conf'], unlabeled_batch['ood_conf']])
+                [batch["soft_label"], unlabeled_batch["pseudo_softlabel"]]
+            )
+            concat_conf = torch.cat([batch["ood_conf"], unlabeled_batch["ood_conf"]])
             loss_oe = rew_sce(
                 concat_logits_cls[concat_label == -1],
                 concat_softlabel[concat_label == -1].cuda(),
@@ -93,10 +96,11 @@ class UDGTrainer(BaseTrainer):
             # aux loss
             concat_logits_aux = torch.cat([logits_aux, logits_oe_aux])
             concat_cluster_id = torch.cat(
-                [batch['cluster_id'], unlabeled_batch['cluster_id']])
-            concat_cluster_reweight = torch.cat([
-                batch['cluster_reweight'], unlabeled_batch['cluster_reweight']
-            ])
+                [batch["cluster_id"], unlabeled_batch["cluster_id"]]
+            )
+            concat_cluster_reweight = torch.cat(
+                [batch["cluster_reweight"], unlabeled_batch["cluster_reweight"]]
+            )
             loss_aux = rew_ce(
                 concat_logits_aux,
                 concat_cluster_id.cuda(),
@@ -104,8 +108,7 @@ class UDGTrainer(BaseTrainer):
             )
 
             # loss addition
-            loss = loss_cls + self.lambda_oe * loss_oe \
-                + self.lambda_aux * loss_aux
+            loss = loss_cls + self.lambda_oe * loss_oe + self.lambda_aux * loss_aux
             # backward
             self.optimizer.zero_grad()
             loss.backward()
@@ -115,18 +118,18 @@ class UDGTrainer(BaseTrainer):
             with torch.no_grad():
                 # exponential moving average, show smooth values
                 loss_cls_avg = loss_cls_avg * 0.8 + float(loss_cls) * 0.2
-                loss_oe_avg = loss_oe_avg * 0.8 + float(
-                    self.lambda_oe * loss_oe) * 0.2
-                loss_aux_avg = (loss_aux_avg * 0.8 +
-                                float(self.lambda_aux * loss_aux) * 0.2)
+                loss_oe_avg = loss_oe_avg * 0.8 + float(self.lambda_oe * loss_oe) * 0.2
+                loss_aux_avg = (
+                    loss_aux_avg * 0.8 + float(self.lambda_aux * loss_aux) * 0.2
+                )
                 loss_avg = loss_avg * 0.8 + float(loss) * 0.2
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['train_cls_loss'] = loss_cls_avg
-        metrics['train_oe_loss'] = loss_oe_avg
-        metrics['train_aux_loss'] = loss_aux_avg
-        metrics['loss'] = loss_avg
+        metrics["epoch_idx"] = epoch_idx
+        metrics["train_cls_loss"] = loss_cls_avg
+        metrics["train_oe_loss"] = loss_oe_avg
+        metrics["train_aux_loss"] = loss_aux_avg
+        metrics["loss"] = loss_avg
 
         return metrics
 
@@ -135,7 +138,7 @@ class UDGTrainer(BaseTrainer):
 
         start_time = time.time()
         # get data from train loader
-        print('Clustering: starting gather training features...', flush=True)
+        print("Clustering: starting gather training features...", flush=True)
         # gather train image feature
         train_idx_list, unlabeled_idx_list, feature_list, train_label_list = (
             [],
@@ -144,17 +147,18 @@ class UDGTrainer(BaseTrainer):
             [],
         )
         train_dataiter = iter(self.train_loader)
-        for step in tqdm(range(1,
-                               len(train_dataiter) + 1),
-                         desc='Epoch {:03d} ID Clustering: '.format(epoch_idx),
-                         position=0,
-                         leave=True,
-                         disable=not comm.is_main_process()):
+        for step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d} ID Clustering: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             batch = next(train_dataiter)
-            index = batch['index']
-            label = batch['label']
+            index = batch["index"]
+            label = batch["label"]
             # we use no augmented image for clustering
-            data = batch['data_aux'].cuda()
+            data = batch["data_aux"].cuda()
             _, feature = self.net(data, return_feature=True)
             feature = feature.detach()
             # evaluation
@@ -174,16 +178,17 @@ class UDGTrainer(BaseTrainer):
         # gather unlabeled image feature in order
         unlabeled_conf_list, unlabeled_pseudo_list = [], []
         unlabeled_dataiter = iter(self.train_unlabeled_loader)
-        for step in tqdm(range(1,
-                               len(unlabeled_dataiter) + 1),
-                         desc='Epoch {:03d} OE Clustering: '.format(epoch_idx),
-                         position=0,
-                         leave=True,
-                         disable=not comm.is_main_process()):
+        for step in tqdm(
+            range(1, len(unlabeled_dataiter) + 1),
+            desc="Epoch {:03d} OE Clustering: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             batch = next(unlabeled_dataiter)
-            index = batch['index']
+            index = batch["index"]
             # we use no augmented image for clustering
-            data = batch['data_aux'].cuda()
+            data = batch["data_aux"].cuda()
             logit, feature = self.net(data, return_feature=True)
             feature = feature.detach()
             logit = logit.detach()
@@ -199,46 +204,40 @@ class UDGTrainer(BaseTrainer):
         unlabeled_idx_list = np.array(unlabeled_idx_list, dtype=int)
         unlabeled_conf_list = np.array(unlabeled_conf_list)
         unlabeled_pseudo_list = np.array(unlabeled_pseudo_list)
-        unlabeled_conf_list = sort_array(unlabeled_conf_list,
-                                         unlabeled_idx_list)
-        unlabeled_pseudo_list = sort_array(unlabeled_pseudo_list,
-                                           unlabeled_idx_list)
+        unlabeled_conf_list = sort_array(unlabeled_conf_list, unlabeled_idx_list)
+        unlabeled_pseudo_list = sort_array(unlabeled_pseudo_list, unlabeled_idx_list)
         torch.cuda.empty_cache()
 
-        print('\nAssigning Cluster Labels...', flush=True)
+        print("\nAssigning Cluster Labels...", flush=True)
         cluster_id = self.k_means.cluster(feature_list)
         train_cluster_id = cluster_id[:num_train_data]
         unlabeled_cluster_id = cluster_id[num_train_data:]
         # assign cluster id to samples. Sorted by shuffle-recording index.
         train_cluster_id = sort_array(train_cluster_id, train_idx_list)
-        unlabeled_cluster_id = sort_array(unlabeled_cluster_id,
-                                          unlabeled_idx_list)
+        unlabeled_cluster_id = sort_array(unlabeled_cluster_id, unlabeled_idx_list)
         self.train_loader.dataset.cluster_id = train_cluster_id
         self.train_unlabeled_loader.dataset.cluster_id = unlabeled_cluster_id
         cluster_id = np.concatenate([train_cluster_id, unlabeled_cluster_id])
         # reweighting based on samples in clusters
         cluster_stat = np.zeros(self.num_clusters)
-        cluster_id_list, cluster_id_counts = np.unique(cluster_id,
-                                                       return_counts=True)
+        cluster_id_list, cluster_id_counts = np.unique(cluster_id, return_counts=True)
         for cluster_idx, counts in zip(cluster_id_list, cluster_id_counts):
             cluster_stat[cluster_idx] = counts
         inv_class_freq = 1 / (cluster_stat + 1e-10)
         sample_weight = np.power(inv_class_freq, 0.5)
         sample_weight *= 1 / sample_weight.mean()
         sample_weight_list = np.array([sample_weight[i] for i in cluster_id])
-        self.train_loader.dataset.cluster_reweight \
-            = sample_weight_list[:num_train_data]
-        self.train_unlabeled_loader.dataset.cluster_reweight \
-            = sample_weight_list[num_train_data:]
+        self.train_loader.dataset.cluster_reweight = sample_weight_list[:num_train_data]
+        self.train_unlabeled_loader.dataset.cluster_reweight = sample_weight_list[
+            num_train_data:
+        ]
 
-        print('In-Distribution Filtering (with OOD Enhancement)...',
-              flush=True)
-        old_train_pseudo_label \
-            = self.train_loader.dataset.pseudo_label
-        old_unlabeled_pseudo_label \
-            = self.train_unlabeled_loader.dataset.pseudo_label
-        old_pseudo_label = np.append(old_train_pseudo_label,
-                                     old_unlabeled_pseudo_label).astype(int)
+        print("In-Distribution Filtering (with OOD Enhancement)...", flush=True)
+        old_train_pseudo_label = self.train_loader.dataset.pseudo_label
+        old_unlabeled_pseudo_label = self.train_unlabeled_loader.dataset.pseudo_label
+        old_pseudo_label = np.append(
+            old_train_pseudo_label, old_unlabeled_pseudo_label
+        ).astype(int)
         new_pseudo_label = (-1 * np.ones_like(old_pseudo_label)).astype(int)
         # process ood confidence for oe loss enhancement (ole)
         new_ood_conf = np.ones_like(old_pseudo_label).astype(float)
@@ -249,14 +248,15 @@ class UDGTrainer(BaseTrainer):
         # pick out clusters with purity over threshold
         for cluster_idx in range(self.num_clusters):
             label_in_cluster, label_counts = np.unique(
-                old_pseudo_label[cluster_id == cluster_idx],
-                return_counts=True)
+                old_pseudo_label[cluster_id == cluster_idx], return_counts=True
+            )
             cluster_size = len(old_pseudo_label[cluster_id == cluster_idx])
             purity = label_counts / cluster_size  # purity list for each label
             # idf
             if np.any(purity > purity_ind_thresh):
                 majority_label = label_in_cluster[purity > purity_ind_thresh][
-                    0]  # first element in the list
+                    0
+                ]  # first element in the list
                 new_pseudo_label[cluster_id == cluster_idx] = majority_label
                 # this might also change some ID but nvm
                 if majority_label > 0:  # ID cluster
@@ -264,20 +264,18 @@ class UDGTrainer(BaseTrainer):
                     total_num_to_filter += num_to_filter
             # ole
             elif np.any(purity > purity_ood_thresh):
-                majority_label = label_in_cluster[
-                    purity > purity_ood_thresh][0]
+                majority_label = label_in_cluster[purity > purity_ood_thresh][0]
                 if majority_label == -1:
-                    new_ood_conf[cluster_id ==
-                                 cluster_idx] = self.oe_enhance_ratio
-        print(f'{total_num_to_filter} sample(s) filtered!', flush=True)
+                    new_ood_conf[cluster_id == cluster_idx] = self.oe_enhance_ratio
+        print(f"{total_num_to_filter} sample(s) filtered!", flush=True)
 
         self.train_unlabeled_loader.dataset.pseudo_label = new_pseudo_label[
-            num_train_data:]
-        self.train_unlabeled_loader.dataset.ood_conf = new_ood_conf[
-            num_train_data:]
+            num_train_data:
+        ]
+        self.train_unlabeled_loader.dataset.ood_conf = new_ood_conf[num_train_data:]
 
-        print('Randomize Auxiliary Head...', flush=True)
-        if hasattr(self.net, 'fc_aux'):
+        print("Randomize Auxiliary Head...", flush=True)
+        if hasattr(self.net, "fc_aux"):
             # reset auxiliary branch
             self.net.fc_aux.weight.data.normal_(mean=0.0, std=0.01)
             self.net.fc_aux.bias.data.zero_()
@@ -287,8 +285,9 @@ class UDGTrainer(BaseTrainer):
             self.net.fc.bias.data.zero_()
 
         print(
-            '# Online Clustering Completed! Duration: {:.2f}s #'.format(
-                time.time() - start_time),
+            "# Online Clustering Completed! Duration: {:.2f}s #".format(
+                time.time() - start_time
+            ),
             flush=True,
         )
 
@@ -302,7 +301,7 @@ def preprocess_features(npdata, pca=256):
         np.array of dim N * pca: data PCA-reduced, whitened and L2-normalized
     """
     _, ndim = npdata.shape
-    npdata = npdata.astype('float32')
+    npdata = npdata.astype("float32")
 
     # Apply PCA-whitening with Faiss
     mat = faiss.PCAMatrix(ndim, pca, eigen_power=-0.5)
@@ -347,7 +346,9 @@ def run_kmeans(x, nmb_clusters, verbose=False):
     # perform the training
     clus.train(x, index)
     _, I = index.search(x, 1)
-    return I.reshape(-1, )
+    return I.reshape(
+        -1,
+    )
 
 
 class KMeans(object):

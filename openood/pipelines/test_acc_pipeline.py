@@ -14,7 +14,7 @@ class TestAccPipeline:
 
         # get dataloader
         loader_dict = get_dataloader(self.config)
-        test_loader = loader_dict['test']
+        test_loader = loader_dict["test"]
 
         # init network
         net = get_network(self.config.network)
@@ -23,8 +23,9 @@ class TestAccPipeline:
         evaluator = get_evaluator(self.config)
 
         # start calculating accuracy
-        print('\nStart evaluation...', flush=True)
+        print("\nStart evaluation...", flush=True)
         test_metrics = evaluator.eval_acc(net, test_loader)
-        print('\nComplete Evaluation, accuracy {:.2f}%'.format(
-            100 * test_metrics['acc']),
-              flush=True)
+        print(
+            "\nComplete Evaluation, accuracy {:.2f}%".format(100 * test_metrics["acc"]),
+            flush=True,
+        )

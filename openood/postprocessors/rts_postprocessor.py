@@ -14,14 +14,14 @@ class RTSPostprocessor(BasePostprocessor):
 
     def postprocess(self, net: nn.Module, data: Any):
         output, variance = net(data, return_var=True)
-        if self.ood_score == 'var':
+        if self.ood_score == "var":
             _, pred = torch.max(torch.softmax(output, dim=1), dim=1)
             conf = torch.mean(variance, dim=1)
-        elif self.ood_score == 'msp':
+        elif self.ood_score == "msp":
             score = torch.softmax(output, dim=1)
             conf, pred = torch.max(score, dim=1)
         else:
-            print('Invalid ood score type, using var instead')
+            print("Invalid ood score type, using var instead")
             _, pred = torch.max(torch.softmax(output, dim=1), dim=1)
             conf = torch.mean(variance, dim=1)
         return pred, conf

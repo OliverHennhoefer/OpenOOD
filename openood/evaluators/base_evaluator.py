@@ -20,24 +20,28 @@ class BaseEvaluator:
     def __init__(self, config: Config):
         self.config = config
 
-    def eval_acc(self,
-                 net: nn.Module,
-                 data_loader: DataLoader,
-                 postprocessor: BasePostprocessor = None,
-                 epoch_idx: int = -1):
+    def eval_acc(
+        self,
+        net: nn.Module,
+        data_loader: DataLoader,
+        postprocessor: BasePostprocessor = None,
+        epoch_idx: int = -1,
+    ):
         net.eval()
 
         loss_avg = 0.0
         correct = 0
         with torch.no_grad():
-            for batch in tqdm(data_loader,
-                              desc='Eval: ',
-                              position=0,
-                              leave=True,
-                              disable=not comm.is_main_process()):
+            for batch in tqdm(
+                data_loader,
+                desc="Eval: ",
+                position=0,
+                leave=True,
+                disable=not comm.is_main_process(),
+            ):
                 # prepare data
-                data = batch['data'].cuda()
-                target = batch['label'].cuda()
+                data = batch["data"].cuda()
+                target = batch["label"].cuda()
 
                 # forward
                 output = net(data)
@@ -55,26 +59,27 @@ class BaseEvaluator:
         acc = correct / len(data_loader.dataset)
 
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = self.save_metrics(loss)
-        metrics['acc'] = self.save_metrics(acc)
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = self.save_metrics(loss)
+        metrics["acc"] = self.save_metrics(acc)
         return metrics
 
-    def extract(self,
-                net: nn.Module,
-                data_loader: DataLoader,
-                filename: str = 'feature'):
+    def extract(
+        self, net: nn.Module, data_loader: DataLoader, filename: str = "feature"
+    ):
         net.eval()
         feat_list, label_list = [], []
 
         with torch.no_grad():
-            for batch in tqdm(data_loader,
-                              desc='Feature Extracting: ',
-                              position=0,
-                              leave=True,
-                              disable=not comm.is_main_process()):
-                data = batch['data'].cuda()
-                label = batch['label']
+            for batch in tqdm(
+                data_loader,
+                desc="Feature Extracting: ",
+                position=0,
+                leave=True,
+                disable=not comm.is_main_process(),
+            ):
+                data = batch["data"].cuda()
+                label = batch["label"]
 
                 _, feat = net(data, return_feature=True)
                 feat_list.extend(to_np(feat))
@@ -85,9 +90,9 @@ class BaseEvaluator:
 
         save_dir = self.config.output_dir
         os.makedirs(save_dir, exist_ok=True)
-        np.savez(os.path.join(save_dir, filename),
-                 feat_list=feat_list,
-                 label_list=label_list)
+        np.savez(
+            os.path.join(save_dir, filename), feat_list=feat_list, label_list=label_list
+        )
 
     def save_metrics(self, value):
         all_values = comm.gather(value)

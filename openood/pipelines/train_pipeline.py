@@ -24,8 +24,8 @@ class TrainPipeline:
 
         # get dataloader
         loader_dict = get_dataloader(self.config)
-        train_loader, val_loader = loader_dict['train'], loader_dict['val']
-        test_loader = loader_dict['test']
+        train_loader, val_loader = loader_dict["train"], loader_dict["val"]
+        test_loader = loader_dict["test"]
 
         # init network
         net = get_network(self.config.network)
@@ -39,34 +39,35 @@ class TrainPipeline:
         if comm.is_main_process():
             # init recorder
             recorder = get_recorder(self.config)
-            print('Start training...', flush=True)
+            print("Start training...", flush=True)
 
         for epoch_idx in range(1, self.config.optimizer.num_epochs + 1):
-            if isinstance(train_loader.sampler,
-                          torch.utils.data.distributed.DistributedSampler):
+            if isinstance(
+                train_loader.sampler, torch.utils.data.distributed.DistributedSampler
+            ):
                 train_loader.sampler.set_epoch(epoch_idx - 1)
 
             # train and eval the model
-            if self.config.trainer.name == 'mos':
-                net, train_metrics, num_groups, group_slices = \
-                    trainer.train_epoch(epoch_idx)
-                val_metrics = evaluator.eval_acc(net,
-                                                 val_loader,
-                                                 train_loader,
-                                                 epoch_idx,
-                                                 num_groups=num_groups,
-                                                 group_slices=group_slices)
-            elif self.config.trainer.name in [
-                    'cider', 'npos', 'palm', 'reweightood'
-            ]:
+            if self.config.trainer.name == "mos":
+                net, train_metrics, num_groups, group_slices = trainer.train_epoch(
+                    epoch_idx
+                )
+                val_metrics = evaluator.eval_acc(
+                    net,
+                    val_loader,
+                    train_loader,
+                    epoch_idx,
+                    num_groups=num_groups,
+                    group_slices=group_slices,
+                )
+            elif self.config.trainer.name in ["cider", "npos", "palm", "reweightood"]:
                 net, train_metrics = trainer.train_epoch(epoch_idx)
                 # cider, npos, and palm only trains the backbone
                 # cannot evaluate ID acc without training the fc layer
                 val_metrics = train_metrics
             else:
                 net, train_metrics = trainer.train_epoch(epoch_idx)
-                val_metrics = evaluator.eval_acc(net, val_loader, None,
-                                                 epoch_idx)
+                val_metrics = evaluator.eval_acc(net, val_loader, None, epoch_idx)
             comm.synchronize()
             if comm.is_main_process():
                 # save model and report the result
@@ -75,15 +76,18 @@ class TrainPipeline:
 
         if comm.is_main_process():
             recorder.summary()
-            print(u'\u2500' * 70, flush=True)
+            print("\u2500" * 70, flush=True)
 
             # evaluate on test set
-            print('Start testing...', flush=True)
+            print("Start testing...", flush=True)
 
         test_metrics = evaluator.eval_acc(net, test_loader)
 
         if comm.is_main_process():
-            print('\nComplete Evaluation, Last accuracy {:.2f}'.format(
-                100.0 * test_metrics['acc']),
-                  flush=True)
-            print('Completed!', flush=True)
+            print(
+                "\nComplete Evaluation, Last accuracy {:.2f}".format(
+                    100.0 * test_metrics["acc"]
+                ),
+                flush=True,
+            )
+            print("Completed!", flush=True)

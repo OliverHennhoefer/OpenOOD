@@ -13,14 +13,14 @@ from .patchcore_evaluator import PatchCoreEvaluator
 
 def get_evaluator(config: Config):
     evaluators = {
-        'base': BaseEvaluator,
-        'ood': OODEvaluator,
-        'fsood': FSOODEvaluator,
-        'patch': PatchCoreEvaluator,
-        'arpl': ARPLEvaluator,
-        'ad': ADEvaluator,
-        'mos': MOSEvaluator,
-        'ece': ECEEvaluator,
-        'osr': OSREvaluator
+        "base": BaseEvaluator,
+        "ood": OODEvaluator,
+        "fsood": FSOODEvaluator,
+        "patch": PatchCoreEvaluator,
+        "arpl": ARPLEvaluator,
+        "ad": ADEvaluator,
+        "mos": MOSEvaluator,
+        "ece": ECEEvaluator,
+        "osr": OSREvaluator,
     }
     return evaluators[config.evaluator.name](config)

@@ -8,7 +8,7 @@ import torch.multiprocessing as mp
 
 from openood.utils import comm
 
-__all__ = ['DEFAULT_TIMEOUT', 'launch']
+__all__ = ["DEFAULT_TIMEOUT", "launch"]
 
 DEFAULT_TIMEOUT = timedelta(minutes=30)
 
@@ -18,7 +18,7 @@ def _find_free_port():
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Binding to port 0 will cause the OS to find an available port for us
-    sock.bind(('', 0))
+    sock.bind(("", 0))
     port = sock.getsockname()[1]
     sock.close()
     # NOTE: there is still a chance the port could be taken by other processes.
@@ -26,13 +26,13 @@ def _find_free_port():
 
 
 def launch(
-        main_func,
-        num_gpus_per_machine,
-        num_machines=1,
-        machine_rank=0,
-        dist_url=None,
-        args=(),
-        timeout=DEFAULT_TIMEOUT,
+    main_func,
+    num_gpus_per_machine,
+    num_machines=1,
+    machine_rank=0,
+    dist_url=None,
+    args=(),
+    timeout=DEFAULT_TIMEOUT,
 ):
     """Launch multi-gpu or distributed training. This function must be called
     on all machines involved in the training. It will spawn child processes
@@ -54,16 +54,18 @@ def launch(
         # https://github.com/pytorch/pytorch/pull/14391
         # TODO prctl in spawned processes
 
-        if dist_url == 'auto':
-            assert num_machines == 1, \
-            'dist_url=auto not supported in multi-machine jobs.'
+        if dist_url == "auto":
+            assert (
+                num_machines == 1
+            ), "dist_url=auto not supported in multi-machine jobs."
             port = _find_free_port()
-            dist_url = f'tcp://127.0.0.1:{port}'
-        if num_machines > 1 and dist_url.startswith('file://'):
+            dist_url = f"tcp://127.0.0.1:{port}"
+        if num_machines > 1 and dist_url.startswith("file://"):
             logger = logging.getLogger(__name__)
             logger.warning(
-                'file:// is not a reliable init_method in multi-machine jobs.'
-                'Prefer tcp://')
+                "file:// is not a reliable init_method in multi-machine jobs."
+                "Prefer tcp://"
+            )
 
         mp.spawn(
             _distributed_worker,
@@ -93,12 +95,13 @@ def _distributed_worker(
     args,
     timeout=DEFAULT_TIMEOUT,
 ):
-    assert torch.cuda.is_available(
-    ), 'cuda is not available. Please check your installation.'
+    assert (
+        torch.cuda.is_available()
+    ), "cuda is not available. Please check your installation."
     global_rank = machine_rank * num_gpus_per_machine + local_rank
     try:
         dist.init_process_group(
-            backend='NCCL',
+            backend="NCCL",
             init_method=dist_url,
             world_size=world_size,
             rank=global_rank,
@@ -106,7 +109,7 @@ def _distributed_worker(
         )
     except Exception as e:
         logger = logging.getLogger(__name__)
-        logger.error('Process group URL: {}'.format(dist_url))
+        logger.error("Process group URL: {}".format(dist_url))
         raise e
 
     # Setup the local process group
@@ -115,7 +118,8 @@ def _distributed_worker(
     num_machines = world_size // num_gpus_per_machine
     for i in range(num_machines):
         ranks_on_i = list(
-            range(i * num_gpus_per_machine, (i + 1) * num_gpus_per_machine))
+            range(i * num_gpus_per_machine, (i + 1) * num_gpus_per_machine)
+        )
         pg = dist.new_group(ranks_on_i)
         if i == machine_rank:
             comm._LOCAL_PROCESS_GROUP = pg

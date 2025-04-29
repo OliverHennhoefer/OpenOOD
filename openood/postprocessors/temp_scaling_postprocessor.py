@@ -10,29 +10,29 @@ from .base_postprocessor import BasePostprocessor
 class TemperatureScalingPostprocessor(BasePostprocessor):
     """A decorator which wraps a model with temperature scaling, internalize
     'temperature' parameter as part of a net model."""
+
     def __init__(self, config):
         super(TemperatureScalingPostprocessor, self).__init__(config)
         self.config = config
-        self.temperature = nn.Parameter(torch.ones(1, device='cuda') *
-                                        1.5)  # initialize T
+        self.temperature = nn.Parameter(
+            torch.ones(1, device="cuda") * 1.5
+        )  # initialize T
         self.setup_flag = False
 
     def setup(self, net: nn.Module, id_loader_dict, ood_loader_dict):
         if not self.setup_flag:
             # make sure that validation set exists
-            assert 'val' in id_loader_dict.keys(
-            ), 'No validation dataset found!'
+            assert "val" in id_loader_dict.keys(), "No validation dataset found!"
 
-            val_dl = id_loader_dict['val']
+            val_dl = id_loader_dict["val"]
             nll_criterion = nn.CrossEntropyLoss().cuda()
 
             logits_list = []  # fit in whole dataset at one time to back prop
             labels_list = []
-            with torch.no_grad(
-            ):  # fix other params of the net, only learn temperature
+            with torch.no_grad():  # fix other params of the net, only learn temperature
                 for batch in tqdm(val_dl):
-                    data = batch['data'].cuda()
-                    labels = batch['label']
+                    data = batch["data"].cuda()
+                    labels = batch["label"]
                     logits = net(data)
                     logits_list.append(logits)
                     labels_list.append(labels)
@@ -42,7 +42,7 @@ class TemperatureScalingPostprocessor(BasePostprocessor):
                 # calculate NLL before temperature scaling
                 before_temperature_nll = nll_criterion(logits, labels)
 
-            print('Before temperature - NLL: %.3f' % (before_temperature_nll))
+            print("Before temperature - NLL: %.3f" % (before_temperature_nll))
 
             optimizer = optim.LBFGS([self.temperature], lr=0.01, max_iter=50)
 
@@ -59,9 +59,10 @@ class TemperatureScalingPostprocessor(BasePostprocessor):
             # print learned parameter temperature,
             # calculate NLL after temperature scaling
             after_temperature_nll = nll_criterion(
-                self._temperature_scale(logits), labels).item()
-            print('Optimal temperature: %.3f' % self.temperature.item())
-            print('After temperature - NLL: %.3f' % (after_temperature_nll))
+                self._temperature_scale(logits), labels
+            ).item()
+            print("Optimal temperature: %.3f" % self.temperature.item())
+            print("After temperature - NLL: %.3f" % (after_temperature_nll))
             self.setup_flag = True
         else:
             pass

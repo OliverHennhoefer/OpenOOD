@@ -15,18 +15,18 @@ from .palm_recorder import PALMRecorder
 
 def get_recorder(config: Config):
     recorders = {
-        'base': BaseRecorder,
-        'cider': CiderRecorder,
-        'draem': DRAEMRecorder,
-        'opengan': OpenGanRecorder,
-        'dcae': DCAERecorder,
-        'dsvdd': DSVDDRecorder,
-        'kdad': KdadRecorder,
-        'arpl': ARPLRecorder,
-        'cutpaste': CutpasteRecorder,
-        'ad': ADRecorder,
-        'rd4ad': Rd4adRecorder,
-        'palm': PALMRecorder,
+        "base": BaseRecorder,
+        "cider": CiderRecorder,
+        "draem": DRAEMRecorder,
+        "opengan": OpenGanRecorder,
+        "dcae": DCAERecorder,
+        "dsvdd": DSVDDRecorder,
+        "kdad": KdadRecorder,
+        "arpl": ARPLRecorder,
+        "cutpaste": CutpasteRecorder,
+        "ad": ADRecorder,
+        "rd4ad": Rd4adRecorder,
+        "palm": PALMRecorder,
     }
 
     return recorders[config.recorder.name](config)

@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 from .base_postprocessor import BasePostprocessor
 from math import ceil
+
 """ Code borrowed from https://github.com/snu-mllab/Neural-Relation-Graph
 """
 
@@ -15,10 +16,10 @@ def normalize(feat, nc=50000):
     with torch.no_grad():
         split = ceil(len(feat) / nc)
         for i in range(split):
-            feat_ = feat[i * nc:(i + 1) * nc]
-            feat[i * nc:(i + 1) *
-                 nc] = feat_ / torch.sqrt((feat_**2).sum(-1) + 1e-10).reshape(
-                     -1, 1)
+            feat_ = feat[i * nc : (i + 1) * nc]
+            feat[i * nc : (i + 1) * nc] = feat_ / torch.sqrt(
+                (feat_**2).sum(-1) + 1e-10
+            ).reshape(-1, 1)
 
     return feat
 
@@ -28,12 +29,12 @@ def kernel(feat, feat_t, prob, prob_t, split=2):
     size = ceil(len(feat_t) / split)
     rel_full = []
     for i in range(split):
-        feat_t_ = feat_t[i * size:(i + 1) * size]
-        prob_t_ = prob_t[i * size:(i + 1) * size]
+        feat_t_ = feat_t[i * size : (i + 1) * size]
+        prob_t_ = prob_t[i * size : (i + 1) * size]
 
         with torch.no_grad():
             dot = torch.matmul(feat, feat_t_.transpose(1, 0))
-            dot = torch.clamp(dot, min=0.)
+            dot = torch.clamp(dot, min=0.0)
 
             sim = torch.matmul(prob, prob_t_.transpose(1, 0))
             rel = dot * sim
@@ -65,14 +66,14 @@ def get_relation(feat, feat_t, prob, prob_t, pow=1, chunk=50, thres=0.03):
 
     score = []
     for i in range(n_chunk):
-        feat_ = feat[i * chunk:(i + 1) * chunk]
-        prob_ = prob[i * chunk:(i + 1) * chunk]
+        feat_ = feat[i * chunk : (i + 1) * chunk]
+        prob_ = prob[i * chunk : (i + 1) * chunk]
 
         rel = kernel(feat_, feat_t, prob_, prob_t)
 
-        mask = (rel.abs() > thres)
+        mask = rel.abs() > thres
         rel_mask = mask * rel
-        edge_sum = (rel_mask.sign() * (rel_mask.abs()**pow)).sum(-1)
+        edge_sum = (rel_mask.sign() * (rel_mask.abs() ** pow)).sum(-1)
 
         score.append(edge_sum.cpu())
 
@@ -96,11 +97,10 @@ class RelationPostprocessor(BasePostprocessor):
             prob_log = []
             net.eval()
             with torch.no_grad():
-                for batch in tqdm(id_loader_dict['train'],
-                                  desc='Setup: ',
-                                  position=0,
-                                  leave=True):
-                    data = batch['data'].cuda()
+                for batch in tqdm(
+                    id_loader_dict["train"], desc="Setup: ", position=0, leave=True
+                ):
+                    data = batch["data"].cuda()
                     data = data.float()
 
                     logit, feature = net(data, return_feature=True)
@@ -121,11 +121,9 @@ class RelationPostprocessor(BasePostprocessor):
         feature = normalize(feature)
         prob = torch.softmax(output, dim=1)
 
-        score = get_relation(feature,
-                             self.feat_train,
-                             prob,
-                             self.prob_train,
-                             pow=self.pow)
+        score = get_relation(
+            feature, self.feat_train, prob, self.prob_train, pow=self.pow
+        )
 
         _, pred = torch.max(prob, dim=1)
 

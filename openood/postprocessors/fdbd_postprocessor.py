@@ -16,6 +16,7 @@ class fDBDPostprocessor(BasePostprocessor):
     implementation, we diverge slightly from the original paper by selecting the regularizer based on the
     validation set.
     """
+
     def __init__(self, config):
         super(fDBDPostprocessor, self).__init__(config)
         self.APS_mode = True
@@ -35,11 +36,10 @@ class fDBDPostprocessor(BasePostprocessor):
             activation_log = []
             net.eval()
             with torch.no_grad():
-                for batch in tqdm(id_loader_dict['train'],
-                                  desc='Setup: ',
-                                  position=0,
-                                  leave=True):
-                    data = batch['data'].cuda()
+                for batch in tqdm(
+                    id_loader_dict["train"], desc="Setup: ", position=0, leave=True
+                ):
+                    data = batch["data"].cuda()
                     data = data.float()
 
                     _, feature = net(data, return_feature=True)
@@ -49,7 +49,8 @@ class fDBDPostprocessor(BasePostprocessor):
             activation_log_concat = np.concatenate(activation_log, axis=0)
             self.activation_log = activation_log_concat
             self.train_mean = torch.from_numpy(
-                np.mean(activation_log_concat, axis=0)).cuda()
+                np.mean(activation_log_concat, axis=0)
+            ).cuda()
 
             # compute denominator matrix
             for i, param in enumerate(net.fc.parameters()):
@@ -79,12 +80,13 @@ class fDBDPostprocessor(BasePostprocessor):
         values, nn_idx = output.max(1)
         logits_sub = torch.abs(output - values.repeat(self.num_classes, 1).T)
         if self.distance_as_normalizer:
-            score = torch.sum(logits_sub / self.denominator_matrix[nn_idx],
-                              axis=1) / torch.norm(feature - self.train_mean,
-                                                   dim=1)
+            score = torch.sum(
+                logits_sub / self.denominator_matrix[nn_idx], axis=1
+            ) / torch.norm(feature - self.train_mean, dim=1)
         else:
-            score = torch.sum(logits_sub / self.denominator_matrix[nn_idx],
-                              axis=1) / torch.norm(feature, dim=1)
+            score = torch.sum(
+                logits_sub / self.denominator_matrix[nn_idx], axis=1
+            ) / torch.norm(feature, dim=1)
         return nn_idx, score
 
     def set_hyperparam(self, hyperparam: list):

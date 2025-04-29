@@ -16,8 +16,8 @@ class FinetunePipeline:
 
         # get dataloader
         loader_dict = get_dataloader(self.config)
-        train_loader, val_loader = loader_dict['train'], loader_dict['val']
-        test_loader = loader_dict['test']
+        train_loader, val_loader = loader_dict["train"], loader_dict["val"]
+        test_loader = loader_dict["test"]
 
         # init network
         net = get_network(self.config.network)
@@ -31,9 +31,9 @@ class FinetunePipeline:
 
         # trainer setup
         trainer.setup()
-        print('\n' + u'\u2500' * 70, flush=True)
+        print("\n" + "\u2500" * 70, flush=True)
 
-        print('Start training...', flush=True)
+        print("Start training...", flush=True)
         for epoch_idx in range(1, self.config.optimizer.num_epochs + 1):
             # train and eval the model
             net, train_metrics = trainer.train_epoch(epoch_idx)
@@ -42,12 +42,15 @@ class FinetunePipeline:
             recorder.save_model(net, val_metrics)
             recorder.report(train_metrics, val_metrics)
         recorder.summary()
-        print(u'\u2500' * 70, flush=True)
+        print("\u2500" * 70, flush=True)
 
         # evaluate on test set
-        print('Start testing...', flush=True)
+        print("Start testing...", flush=True)
         test_metrics = evaluator.eval_acc(net, test_loader)
-        print('\nComplete Evaluation, accuracy {:.2f}'.format(
-            100.0 * test_metrics['acc']),
-              flush=True)
-        print('Completed!', flush=True)
+        print(
+            "\nComplete Evaluation, accuracy {:.2f}".format(
+                100.0 * test_metrics["acc"]
+            ),
+            flush=True,
+        )
+        print("Completed!", flush=True)

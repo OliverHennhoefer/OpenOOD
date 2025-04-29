@@ -27,11 +27,10 @@ class NCIPostprocessor(BasePostprocessor):
             activation_log = []
             net.eval()
             with torch.no_grad():
-                for batch in tqdm(id_loader_dict['train'],
-                                  desc='Setup: ',
-                                  position=0,
-                                  leave=True):
-                    data = batch['data'].cuda()
+                for batch in tqdm(
+                    id_loader_dict["train"], desc="Setup: ", position=0, leave=True
+                ):
+                    data = batch["data"].cuda()
                     data = data.float()
 
                     _, feature = net(data, return_feature=True)
@@ -41,7 +40,8 @@ class NCIPostprocessor(BasePostprocessor):
             activation_log_concat = np.concatenate(activation_log, axis=0)
             self.activation_log = activation_log_concat
             self.train_mean = torch.from_numpy(
-                np.mean(activation_log_concat, axis=0)).cuda()
+                np.mean(activation_log_concat, axis=0)
+            ).cuda()
 
             # compute denominator matrix
             for i, param in enumerate(net.fc.parameters()):
@@ -57,7 +57,11 @@ class NCIPostprocessor(BasePostprocessor):
     def postprocess(self, net: nn.Module, data: Any):
         output, feature = net(data, return_feature=True)
         values, nn_idx = output.max(1)
-        score = torch.sum(self.w[nn_idx] * (feature - self.train_mean), axis=1) /torch.norm(feature - self.train_mean, dim = 1) + self.alpha * torch.norm(feature, p = 1, dim = 1)
+        score = torch.sum(
+            self.w[nn_idx] * (feature - self.train_mean), axis=1
+        ) / torch.norm(feature - self.train_mean, dim=1) + self.alpha * torch.norm(
+            feature, p=1, dim=1
+        )
         return nn_idx, score
 
     def set_hyperparam(self, hyperparam: list):

@@ -12,8 +12,9 @@ from .lr_scheduler import cosine_annealing
 
 
 class ASCOODTrainer:
-    def __init__(self, net: nn.Module, train_loader: DataLoader,
-                 config: Config) -> None:
+    def __init__(
+        self, net: nn.Module, train_loader: DataLoader, config: Config
+    ) -> None:
 
         self.net = net
 
@@ -30,18 +31,13 @@ class ASCOODTrainer:
 
         if not self.kl_div:
             self.logistic_regression = torch.nn.Sequential(
-                torch.nn.Linear(1, 512), torch.nn.ReLU(),
-                torch.nn.Linear(512, 2)).cuda()
+                torch.nn.Linear(1, 512), torch.nn.ReLU(), torch.nn.Linear(512, 2)
+            ).cuda()
             backbone_params.extend(list(self.logistic_regression.parameters()))
 
         fc_params = list(net.parameters())[-2:]
         fc_lr = config.optimizer.fc_lr_factor * config.optimizer.lr
-        params_list = [{
-            'params': backbone_params
-        }, {
-            'params': fc_params,
-            'lr': fc_lr
-        }]
+        params_list = [{"params": backbone_params}, {"params": fc_params, "lr": fc_lr}]
 
         self.optimizer = torch.optim.SGD(
             params_list,
@@ -63,7 +59,7 @@ class ASCOODTrainer:
 
         self.w = config.trainer.trainer_args.w
         self.num_classes = config.dataset.num_classes
-        self.kl_loss = nn.KLDivLoss(reduction='batchmean')
+        self.kl_loss = nn.KLDivLoss(reduction="batchmean")
         self.p_inv = config.trainer.trainer_args.p_inv
         self.ood_type = config.trainer.trainer_args.ood_type
         self.alpha_min = config.trainer.trainer_args.alpha_min
@@ -88,19 +84,18 @@ class ASCOODTrainer:
         grad = grad.exp().sum(dim=1)
         grad = grad.view(batch_size, -1)
         _, top_indices = torch.topk(grad, n_pixels, dim=1)
-        shuffle_indices = torch.argsort(torch.rand_like(top_indices.float()),
-                                        dim=1)
+        shuffle_indices = torch.argsort(torch.rand_like(top_indices.float()), dim=1)
         data_flat = data.view(batch_size, channels, -1)
         selected_pixels = torch.gather(
-            data_flat, 2,
-            top_indices.unsqueeze(1).expand(-1, channels, -1))
+            data_flat, 2, top_indices.unsqueeze(1).expand(-1, channels, -1)
+        )
         shuffled_pixels = torch.gather(
-            selected_pixels, 2,
-            shuffle_indices.unsqueeze(1).expand(-1, channels, -1))
+            selected_pixels, 2, shuffle_indices.unsqueeze(1).expand(-1, channels, -1)
+        )
         data_ood = data_flat.clone()
-        data_ood.scatter_(2,
-                          top_indices.unsqueeze(1).expand(-1, channels, -1),
-                          shuffled_pixels)
+        data_ood.scatter_(
+            2, top_indices.unsqueeze(1).expand(-1, channels, -1), shuffled_pixels
+        )
         data_ood = data_ood.view_as(data)
         return data_ood.detach()
 
@@ -117,7 +112,7 @@ class ASCOODTrainer:
 
     def get_ood_sample(self, data, target):
         grad = self.get_grad(data, target)
-        if self.ood_type == 'shuffle':
+        if self.ood_type == "shuffle":
             return self.shuffle_ood(data, grad)
         else:
             return self.gradient_ood(data, grad)
@@ -128,20 +123,22 @@ class ASCOODTrainer:
         loss_avg = 0.0
         train_dataiter = iter(self.train_loader)
 
-        if not self.ood_type == 'shuffle':
+        if not self.ood_type == "shuffle":
             progress = epoch_idx / self.config.optimizer.num_epochs
-            self.alpha = (self.alpha_max -
-                          self.alpha_min) * (1 - progress) + self.alpha_min
+            self.alpha = (self.alpha_max - self.alpha_min) * (
+                1 - progress
+            ) + self.alpha_min
 
-        for train_step in tqdm(range(1,
-                                     len(train_dataiter) + 1),
-                               desc='Epoch {:03d}: '.format(epoch_idx),
-                               position=0,
-                               leave=True,
-                               disable=not comm.is_main_process()):
+        for train_step in tqdm(
+            range(1, len(train_dataiter) + 1),
+            desc="Epoch {:03d}: ".format(epoch_idx),
+            position=0,
+            leave=True,
+            disable=not comm.is_main_process(),
+        ):
             batch = next(train_dataiter)
-            data = batch['data'].cuda()
-            target = batch['label'].cuda()
+            data = batch["data"].cuda()
+            target = batch["label"].cuda()
             data_ood = self.get_ood_sample(data.clone(), target)
             data = torch.cat([data, data_ood], dim=0)
             batch_size = len(target)
@@ -150,18 +147,21 @@ class ASCOODTrainer:
             if self.kl_div:
                 id_logit, ood_logit = logit[:batch_size], logit[batch_size:]
                 id_loss = F.cross_entropy(id_logit, target)
-                target_ood = torch.Tensor(len(ood_logit),
-                                          self.num_classes).fill_(
-                                              1 / self.num_classes).cuda()
-                ood_loss = self.kl_loss(F.log_softmax(ood_logit, dim=1),
-                                        target_ood)
+                target_ood = (
+                    torch.Tensor(len(ood_logit), self.num_classes)
+                    .fill_(1 / self.num_classes)
+                    .cuda()
+                )
+                ood_loss = self.kl_loss(F.log_softmax(ood_logit, dim=1), target_ood)
             else:
                 id_loss = F.cross_entropy(logit[:batch_size], target)
                 energy = torch.logsumexp(logit, dim=1)
                 output_e = self.logistic_regression(energy.reshape(-1, 1))
-                lr_target = torch.cat(
-                    [torch.ones(batch_size),
-                     torch.zeros(batch_size)]).cuda().long()
+                lr_target = (
+                    torch.cat([torch.ones(batch_size), torch.zeros(batch_size)])
+                    .cuda()
+                    .long()
+                )
                 ood_loss = F.cross_entropy(output_e, lr_target)
 
             loss = id_loss + self.w * ood_loss
@@ -176,8 +176,8 @@ class ASCOODTrainer:
 
         # comm.synchronize()
         metrics = {}
-        metrics['epoch_idx'] = epoch_idx
-        metrics['loss'] = self.save_metrics(loss_avg)
+        metrics["epoch_idx"] = epoch_idx
+        metrics["loss"] = self.save_metrics(loss_avg)
 
         return self.net, metrics
 

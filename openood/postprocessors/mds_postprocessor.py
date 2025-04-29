@@ -20,16 +20,15 @@ class MDSPostprocessor(BasePostprocessor):
     def setup(self, net: nn.Module, id_loader_dict, ood_loader_dict):
         if not self.setup_flag:
             # estimate mean and variance from training set
-            print('\n Estimating mean and variance from training set...')
+            print("\n Estimating mean and variance from training set...")
             all_feats = []
             all_labels = []
             all_preds = []
             with torch.no_grad():
-                for batch in tqdm(id_loader_dict['train'],
-                                  desc='Setup: ',
-                                  position=0,
-                                  leave=True):
-                    data, labels = batch['data'].cuda(), batch['label']
+                for batch in tqdm(
+                    id_loader_dict["train"], desc="Setup: ", position=0, leave=True
+                ):
+                    data, labels = batch["data"].cuda(), batch["label"]
                     logits, features = net(data, return_feature=True)
                     all_feats.append(features.cpu())
                     all_labels.append(deepcopy(labels))
@@ -40,7 +39,7 @@ class MDSPostprocessor(BasePostprocessor):
             all_preds = torch.cat(all_preds)
             # sanity check on train acc
             train_acc = all_preds.eq(all_labels).float().mean()
-            print(f' Train acc: {train_acc:.2%}')
+            print(f" Train acc: {train_acc:.2%}")
 
             # compute class-conditional statistics
             self.class_mean = []
@@ -48,16 +47,14 @@ class MDSPostprocessor(BasePostprocessor):
             for c in range(self.num_classes):
                 class_samples = all_feats[all_labels.eq(c)].data
                 self.class_mean.append(class_samples.mean(0))
-                centered_data.append(class_samples -
-                                     self.class_mean[c].view(1, -1))
+                centered_data.append(class_samples - self.class_mean[c].view(1, -1))
 
             self.class_mean = torch.stack(
-                self.class_mean)  # shape [#classes, feature dim]
+                self.class_mean
+            )  # shape [#classes, feature dim]
 
-            group_lasso = sklearn.covariance.EmpiricalCovariance(
-                assume_centered=False)
-            group_lasso.fit(
-                torch.cat(centered_data).cpu().numpy().astype(np.float32))
+            group_lasso = sklearn.covariance.EmpiricalCovariance(assume_centered=False)
+            group_lasso.fit(torch.cat(centered_data).cpu().numpy().astype(np.float32))
             # inverse of covariance
             self.precision = torch.from_numpy(group_lasso.precision_).float()
             self.setup_flag = True
@@ -73,7 +70,8 @@ class MDSPostprocessor(BasePostprocessor):
         for c in range(self.num_classes):
             tensor = features.cpu() - self.class_mean[c].view(1, -1)
             class_scores[:, c] = -torch.matmul(
-                torch.matmul(tensor, self.precision), tensor.t()).diag()
+                torch.matmul(tensor, self.precision), tensor.t()
+            ).diag()
 
         conf = torch.max(class_scores, dim=1)[0]
         return pred, conf

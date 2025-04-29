@@ -10,22 +10,22 @@ from .base_preprocessor import BasePreprocessor
 from .transform import Convert, interpolation_modes, normalization_dict
 
 resize_list = {
-    'osr': 32,
-    'mnist': 32,
-    'cifar10': 36,
-    'cifar100': 36,
-    'tin': 72,
-    'imagenet': 256,
-    'imagenet200': 256,
-    'aircraft': 512,
-    'cub': 512,
+    "osr": 32,
+    "mnist": 32,
+    "cifar10": 36,
+    "cifar100": 36,
+    "tin": 72,
+    "imagenet": 256,
+    "imagenet200": 256,
+    "aircraft": 512,
+    "cub": 512,
 }  # set mnist bymyself, imagenet was set to 224 by author, but 256 here
 
 
 class PixMixPreprocessor(BasePreprocessor):
     def __init__(self, config):
         self.pre_size = config.dataset.pre_size
-        self.dataset_name = config.dataset.name.split('_')[0]
+        self.dataset_name = config.dataset.name.split("_")[0]
         self.image_size = config.dataset.image_size
         self.interpolation = interpolation_modes[config.dataset.interpolation]
         normalization_type = config.dataset.normalization_type
@@ -40,45 +40,52 @@ class PixMixPreprocessor(BasePreprocessor):
 
         self.args = config.preprocessor.preprocessor_args
 
-        if 'imagenet' in config.dataset.name:
-            self.transform = tvs_trans.Compose([
-                tvs_trans.RandomResizedCrop(self.image_size,
-                                            interpolation=self.interpolation),
-                tvs_trans.RandomHorizontalFlip(0.5),
-            ])
-        elif 'aircraft' in config.dataset.name or 'cub' in config.dataset.name:
-            self.transform = tvs_trans.Compose([
-                tvs_trans.Resize(self.pre_size,
-                                 interpolation=self.interpolation),
-                tvs_trans.RandomCrop(self.image_size),
-                tvs_trans.RandomHorizontalFlip(),
-            ])
+        if "imagenet" in config.dataset.name:
+            self.transform = tvs_trans.Compose(
+                [
+                    tvs_trans.RandomResizedCrop(
+                        self.image_size, interpolation=self.interpolation
+                    ),
+                    tvs_trans.RandomHorizontalFlip(0.5),
+                ]
+            )
+        elif "aircraft" in config.dataset.name or "cub" in config.dataset.name:
+            self.transform = tvs_trans.Compose(
+                [
+                    tvs_trans.Resize(self.pre_size, interpolation=self.interpolation),
+                    tvs_trans.RandomCrop(self.image_size),
+                    tvs_trans.RandomHorizontalFlip(),
+                ]
+            )
         else:
-            self.transform = tvs_trans.Compose([
-                Convert('RGB'),
-                tvs_trans.Resize(self.pre_size,
-                                 interpolation=self.interpolation),
-                tvs_trans.CenterCrop(self.image_size),
-                tvs_trans.RandomHorizontalFlip(),
-                tvs_trans.RandomCrop(self.image_size, padding=4),
-            ])
+            self.transform = tvs_trans.Compose(
+                [
+                    Convert("RGB"),
+                    tvs_trans.Resize(self.pre_size, interpolation=self.interpolation),
+                    tvs_trans.CenterCrop(self.image_size),
+                    tvs_trans.RandomHorizontalFlip(),
+                    tvs_trans.RandomCrop(self.image_size, padding=4),
+                ]
+            )
 
-        self.mixing_set_transform = tvs_trans.Compose([
-            tvs_trans.Resize(resize_list[self.dataset_name]),
-            tvs_trans.RandomCrop(self.image_size)
-        ])
+        self.mixing_set_transform = tvs_trans.Compose(
+            [
+                tvs_trans.Resize(resize_list[self.dataset_name]),
+                tvs_trans.RandomCrop(self.image_size),
+            ]
+        )
 
-        with open(self.args.mixing_set_dir, 'r') as f:
+        with open(self.args.mixing_set_dir, "r") as f:
             self.mixing_list = f.readlines()
 
     def __call__(self, image):
         # ? need to add random seed ?
         rnd_idx = np.random.choice(len(self.mixing_list))
-        mixing_pic_dir = self.mixing_list[rnd_idx].strip('\n')
+        mixing_pic_dir = self.mixing_list[rnd_idx].strip("\n")
 
         mixing_pic = Image.open(
-            os.path.join('./data/images_classic/',
-                         mixing_pic_dir)).convert('RGB')
+            os.path.join("./data/images_classic/", mixing_pic_dir)
+        ).convert("RGB")
         return self.pixmix(image, mixing_pic)
 
     def augment_input(self, image):
@@ -143,7 +150,7 @@ def float_parameter(level, maxval):
     Returns:
       A float that results from scaling `maxval` according to `level`.
     """
-    return float(level) * maxval / 10.
+    return float(level) * maxval / 10.0
 
 
 def sample_level(n):
@@ -179,36 +186,48 @@ def shear_x(pil_img, level, IMAGE_SIZE):
     level = float_parameter(sample_level(level), 0.3)
     if np.random.uniform() > 0.5:
         level = -level
-    return pil_img.transform((IMAGE_SIZE, IMAGE_SIZE),
-                             Image.AFFINE, (1, level, 0, 0, 1, 0),
-                             resample=Image.BILINEAR)
+    return pil_img.transform(
+        (IMAGE_SIZE, IMAGE_SIZE),
+        Image.AFFINE,
+        (1, level, 0, 0, 1, 0),
+        resample=Image.BILINEAR,
+    )
 
 
 def shear_y(pil_img, level, IMAGE_SIZE):
     level = float_parameter(sample_level(level), 0.3)
     if np.random.uniform() > 0.5:
         level = -level
-    return pil_img.transform((IMAGE_SIZE, IMAGE_SIZE),
-                             Image.AFFINE, (1, 0, 0, level, 1, 0),
-                             resample=Image.BILINEAR)
+    return pil_img.transform(
+        (IMAGE_SIZE, IMAGE_SIZE),
+        Image.AFFINE,
+        (1, 0, 0, level, 1, 0),
+        resample=Image.BILINEAR,
+    )
 
 
 def translate_x(pil_img, level, IMAGE_SIZE):
     level = int_parameter(sample_level(level), IMAGE_SIZE / 3)
     if np.random.random() > 0.5:
         level = -level
-    return pil_img.transform((IMAGE_SIZE, IMAGE_SIZE),
-                             Image.AFFINE, (1, 0, level, 0, 1, 0),
-                             resample=Image.BILINEAR)
+    return pil_img.transform(
+        (IMAGE_SIZE, IMAGE_SIZE),
+        Image.AFFINE,
+        (1, 0, level, 0, 1, 0),
+        resample=Image.BILINEAR,
+    )
 
 
 def translate_y(pil_img, level, IMAGE_SIZE):
     level = int_parameter(sample_level(level), IMAGE_SIZE / 3)
     if np.random.random() > 0.5:
         level = -level
-    return pil_img.transform((IMAGE_SIZE, IMAGE_SIZE),
-                             Image.AFFINE, (1, 0, 0, 0, 1, level),
-                             resample=Image.BILINEAR)
+    return pil_img.transform(
+        (IMAGE_SIZE, IMAGE_SIZE),
+        Image.AFFINE,
+        (1, 0, 0, 0, 1, level),
+        resample=Image.BILINEAR,
+    )
 
 
 # operation that overlaps with ImageNet-C's test set
@@ -236,13 +255,31 @@ def sharpness(pil_img, level, IMAGE_SIZE):
 
 
 augmentations = [
-    autocontrast, equalize, posterize, rotate, solarize, shear_x, shear_y,
-    translate_x, translate_y
+    autocontrast,
+    equalize,
+    posterize,
+    rotate,
+    solarize,
+    shear_x,
+    shear_y,
+    translate_x,
+    translate_y,
 ]
 
 augmentations_all = [
-    autocontrast, equalize, posterize, rotate, solarize, shear_x, shear_y,
-    translate_x, translate_y, color, contrast, brightness, sharpness
+    autocontrast,
+    equalize,
+    posterize,
+    rotate,
+    solarize,
+    shear_x,
+    shear_y,
+    translate_x,
+    translate_y,
+    color,
+    contrast,
+    brightness,
+    sharpness,
 ]
 
 #########################################################
@@ -270,7 +307,7 @@ def add(img1, img2, beta):
 def multiply(img1, img2, beta):
     a, b = get_ab(beta)
     img1, img2 = img1 * 2, img2 * 2
-    out = (img1**a) * (img2.clip(1e-37)**b)
+    out = (img1**a) * (img2.clip(1e-37) ** b)
     return out / 2
 
 

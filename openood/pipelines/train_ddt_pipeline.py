@@ -17,8 +17,8 @@ class TrainPipeline:
 
         # get dataloader
         loader_dict = get_dataloader(self.config)
-        train_loader, val_loader = loader_dict['train'], loader_dict['val']
-        test_loader = loader_dict['test']
+        train_loader, val_loader = loader_dict["train"], loader_dict["val"]
+        test_loader = loader_dict["test"]
 
         # init network
         net = get_network(self.config.network)
@@ -31,7 +31,7 @@ class TrainPipeline:
             # init recorder
             recorder = get_recorder(self.config)
 
-            print('Start training...', flush=True)
+            print("Start training...", flush=True)
         for epoch_idx in range(1, self.config.optimizer.num_epochs + 1):
             # train and eval the model
             net, train_metrics = trainer.train_epoch(epoch_idx)
@@ -44,15 +44,18 @@ class TrainPipeline:
 
         if comm.is_main_process():
             recorder.summary()
-            print(u'\u2500' * 70, flush=True)
+            print("\u2500" * 70, flush=True)
 
             # evaluate on test set
-            print('Start testing...', flush=True)
+            print("Start testing...", flush=True)
 
         test_metrics = evaluator.eval_acc(net, test_loader)
 
         if comm.is_main_process():
-            print('\nComplete Evaluation, Last accuracy {:.2f}'.format(
-                100.0 * test_metrics['acc']),
-                  flush=True)
-            print('Completed!', flush=True)
+            print(
+                "\nComplete Evaluation, Last accuracy {:.2f}".format(
+                    100.0 * test_metrics["acc"]
+                ),
+                flush=True,
+            )
+            print("Completed!", flush=True)

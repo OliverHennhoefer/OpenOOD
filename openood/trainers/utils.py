@@ -38,55 +38,54 @@ from .reweightood_trainer import ReweightOODTrainer
 from .ascood_trainer import ASCOODTrainer
 
 
-def get_trainer(net, train_loader: DataLoader, val_loader: DataLoader,
-                config: Config):
+def get_trainer(net, train_loader: DataLoader, val_loader: DataLoader, config: Config):
     if type(train_loader) is DataLoader:
         trainers = {
-            'base': BaseTrainer,
-            'augmix': AugMixTrainer,
-            'mixup': MixupTrainer,
-            'regmixup': RegMixupTrainer,
-            'sae': SAETrainer,
-            'draem': DRAEMTrainer,
-            'kdad': KdadTrainer,
-            'conf_branch': ConfBranchTrainer,
-            'dcae': AETrainer,
-            'dsvdd': DSVDDTrainer,
-            'npos': NPOSTrainer,
-            'opengan': OpenGanTrainer,
-            'kdad': KdadTrainer,
-            'godin': GodinTrainer,
-            'arpl': ARPLTrainer,
-            'arpl_gan': ARPLGANTrainer,
-            'mos': MOSTrainer,
-            'vos': VOSTrainer,
-            'cider': CIDERTrainer,
-            'cutpaste': CutPasteTrainer,
-            'cutmix': CutMixTrainer,
-            'dropout': DropoutTrainer,
-            'csi': CSITrainer,
-            'logitnorm': LogitNormTrainer,
-            'rd4ad': Rd4adTrainer,
-            'rts': RTSTrainer,
-            'rotpred': RotPredTrainer,
-            'ish': ISHTrainer,
-            'palm': PALMTrainer,
-            't2fnorm': T2FNormTrainer,
-            'reweightood': ReweightOODTrainer,
-            'ascood': ASCOODTrainer,
+            "base": BaseTrainer,
+            "augmix": AugMixTrainer,
+            "mixup": MixupTrainer,
+            "regmixup": RegMixupTrainer,
+            "sae": SAETrainer,
+            "draem": DRAEMTrainer,
+            "kdad": KdadTrainer,
+            "conf_branch": ConfBranchTrainer,
+            "dcae": AETrainer,
+            "dsvdd": DSVDDTrainer,
+            "npos": NPOSTrainer,
+            "opengan": OpenGanTrainer,
+            "kdad": KdadTrainer,
+            "godin": GodinTrainer,
+            "arpl": ARPLTrainer,
+            "arpl_gan": ARPLGANTrainer,
+            "mos": MOSTrainer,
+            "vos": VOSTrainer,
+            "cider": CIDERTrainer,
+            "cutpaste": CutPasteTrainer,
+            "cutmix": CutMixTrainer,
+            "dropout": DropoutTrainer,
+            "csi": CSITrainer,
+            "logitnorm": LogitNormTrainer,
+            "rd4ad": Rd4adTrainer,
+            "rts": RTSTrainer,
+            "rotpred": RotPredTrainer,
+            "ish": ISHTrainer,
+            "palm": PALMTrainer,
+            "t2fnorm": T2FNormTrainer,
+            "reweightood": ReweightOODTrainer,
+            "ascood": ASCOODTrainer,
         }
-        if config.trainer.name in ['cider', 'npos']:
-            return trainers[config.trainer.name](net, train_loader, val_loader,
-                                                 config)
+        if config.trainer.name in ["cider", "npos"]:
+            return trainers[config.trainer.name](net, train_loader, val_loader, config)
         else:
             return trainers[config.trainer.name](net, train_loader, config)
 
     else:
         trainers = {
-            'oe': OETrainer,
-            'mcd': MCDTrainer,
-            'udg': UDGTrainer,
-            'mixoe': MixOETrainer
+            "oe": OETrainer,
+            "mcd": MCDTrainer,
+            "udg": UDGTrainer,
+            "mixoe": MixOETrainer,
         }
-        return trainers[config.trainer.name](net, train_loader[0],
-                                             train_loader[1], config)
+        return trainers[config.trainer.name](
+            net, train_loader[0], train_loader[1], config
+        )
