@@ -17,6 +17,7 @@ setuptools.setup(
     install_requires=[
         'torch>=1.13.1',
         'torchvision>=0.13',
+        'numpy~=1.26.4',
         'scikit-learn',
         'json5',
         'matplotlib',
