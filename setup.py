@@ -25,11 +25,11 @@ setuptools.setup(
         'pyyaml>=5.4.1',
         'pre-commit',
         'opencv-python>=4.4.0.46',
-        'imgaug>=0.4.0',
+        'imgaug-denk~=0.4.6',
         'pandas',
         'diffdist>=0.1',
         'Cython>=0.29.30',
-        'faiss>=1.7.2',
+        'faiss-cpu~=1.11.0',
         'gdown>=4.7.1',  # 'libmr>=0.1.9'
     ],
     classifiers=[
