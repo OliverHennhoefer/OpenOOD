@@ -1,0 +1,153 @@
+# Python Class Requirements Specification: `NetworkScanner` (Refactored)
+
+## 1. Class Purpose & Goal
+
+* **Overall Goal:** To provide a focused mechanism for analyzing trained PyTorch (`torch.nn`) or optionally PyTorch Lightning (`lightning.LightningModule`) Convolutional Neural Network (CNN) models by extracting **pre-activations** (inputs) from a **user-specified list of layers**.
+* **Core Functionality:** Implement a `.predict()` method that performs model inference on a dataset and uses PyTorch forward hooks to capture the input tensors fed into the designated target layers.
+* **Output:** Consolidate the extracted pre-activation data across the dataset into a structured `polars.DataFrame`.
+    * Multi-dimensional pre-activation tensors (typically inputs to `nn.ConvNd` layers) are summarized per-channel via **Global Average Pooling (GAP)**.
+    * One-dimensional pre-activation tensors (typically inputs to `nn.Linear` layers) are stored as vectors.
+* **Use Case:** Enable detailed analysis of the inputs received by specific layers within CNNs, particularly for models like ResNets. Useful for research, debugging layer behavior, understanding feature distributions entering specific computational stages, or analyzing model representations on image benchmarks (e.g., MNIST, FashionMNIST, CIFAR). The focus on specific layers allows targeted investigation.
+
+## 2. Class Name
+
+* **Proposed Name:** `NetworkScanner`
+
+## 3. Initialization (`__init__` method)
+
+* **Parameters:**
+    * `model` (Type: `Union[lightning.LightningModule, torch.nn.Module]`, **Required**): The pre-trained PyTorch (`nn.Module`) or optionally PyTorch Lightning (`pl.LightningModule`, if installed) model to be analyzed. It should be loaded with weights and set to the correct device (`.to(device)`) *before* being passed.
+    * `target_layer_names` (Type: `List[str]`, **Required**): A list of strings specifying the exact names (as they appear in `model.named_modules()`) of the layers whose **inputs** (pre-activations) should be captured and stored.
+* **Initialization Steps:**
+    1.  Store the `model` reference internally. Ensure `model.eval()`.
+    2.  Determine the `device` from the model's parameters (defaulting to CPU if none). Ensure the model is on this device.
+    3.  Store the provided `target_layer_names` list.
+    4.  Call an internal method (`_identify_target_modules`) to find the actual `nn.Module` objects corresponding to the names in `target_layer_names`. Store these found modules in a dictionary (`self.target_modules`). Warn if any specified names are not found in the model. Raise an error if *no* target layers are found.
+    5.  Initialize internal storage for PyTorch hook handles (`self._hook_handles`).
+
+## 4. Attributes (Internal State)
+
+* `model`: The model object provided during initialization.
+* `device`: The torch device the model is intended to run on.
+* `target_layer_names`: The list of layer names provided by the user during initialization.
+* `target_modules`: A dictionary mapping found layer names (from `target_layer_names`) to their corresponding `nn.Module` objects.
+* `_hook_handles`: A list used internally by `predict` to store handles of registered forward hooks, facilitating their removal.
+* `extracted_data_list`: A list used *during* the `predict` method to accumulate dictionaries of extracted data for each sample before final DataFrame conversion.
+
+## 5. Methods (Functionality/Behavior)
+
+### 5.1. `_identify_target_modules(self)`
+
+* **Purpose:** Internal helper method called during `__init__`. Iterates through `self.model.named_modules()` and populates `self.target_modules` with modules whose names match those listed in `self.target_layer_names`. Issues warnings for unmatched names.
+* **Parameters:** None.
+* **Return Value:** None. Modifies `self.target_modules`.
+
+### 5.2. `_clear_hooks(self)`
+
+* **Purpose:** Internal helper method to remove all active PyTorch hooks registered by this instance and clear the internal handle list.
+* **Parameters:** None.
+* **Return Value:** None.
+
+### 5.3. `predict(self, dataloader: torch.utils.data.DataLoader, include_label: bool = True, include_image_id: bool = True)`
+
+* **Purpose:** Performs inference on the data provided by the `dataloader` and extracts the **pre-activations** (inputs) for the layers specified during initialization (`target_layer_names`).
+* **Parameters:**
+    * `dataloader` (Type: `torch.utils.data.DataLoader`, **Required**): A PyTorch DataLoader yielding batches. Expected batch format is a tuple where the first element is the image tensor (e.g., `(images, ...)`).
+    * `include_label` (Type: `bool`, Default: `True`): If `True`, attempts to include a 'label' column in the output DataFrame. Assumes labels are the second element in the batch tuple (e.g., `(images, labels, ...)`).
+    * `include_image_id` (Type: `bool`, Default: `True`): If `True`, attempts to include an 'image_id' column. Assumes image IDs are the third element in the batch tuple (e.g., `(images, labels, image_ids)`) and that the dataloader yields them.
+* **Return Value:**
+    * `polars.DataFrame`: A DataFrame where each row corresponds to a single input sample processed. Columns include:
+        * `'label'` (Optional, if `include_label=True` and available).
+        * `'image_id'` (Optional, if `include_image_id=True` and available).
+        * For each targeted layer:
+            * `'{layer_name}_pre_activation_avg'` (Type: `polars.List(polars.Float64)`): If the pre-activation tensor was multi-dimensional (e.g., input to ConvNd, `ndim >= 3`), this column contains a list representing the **Global Average Pooled** values across spatial dimensions (one value per input channel).
+            * `'{layer_name}_pre_activation'` (Type: `polars.List(polars.Float64)` or `polars.Float64`): If the pre-activation tensor was 1D (e.g., input to Linear) or 0D (scalar), this column contains the values as a list or scalar, respectively.
+* **Core Logic:**
+    1.  **Initialization:** Clear `self.extracted_data_list`, ensure `model.eval()`, ensure model is on `self.device`.
+    2.  **Data Iteration:** Loop through the `dataloader` (optionally using `tqdm` for progress).
+    3.  **Batch Processing:** For each `batch`:
+        * Unpack batch elements (images, optional labels, optional IDs) based on `include_...` flags. Move image tensor to `self.device`.
+        * Initialize batch storage (`batch_storage = defaultdict(list)`).
+        * **Hook Registration:** Register forward hooks (`register_forward_hook`) on each module listed in `self.target_modules`. The hook function captures the *first input tensor* passed to the module, detaches it, moves it to the CPU, and appends it to `batch_storage` under a key like `'{layer_name}_pre_activation'`. Store hook handles.
+        * **Forward Pass:** Execute the model's forward pass within a `torch.no_grad()` context: `_ = self.model(images)`. The registered hooks capture the pre-activations during this call.
+        * **Hook Removal:** Call `self._clear_hooks()` to remove all registered hooks for the batch.
+        * **Data Consolidation:** Consolidate tensors stored in `batch_storage`. Handle cases where a hook might fire multiple times (warn and use the first).
+        * **Sample Extraction & GAP:** Loop through each sample `i` in the batch:
+            * Create `sample_data` dictionary. Add `label` and `image_id` if requested and available.
+            * For each captured pre-activation tensor in `consolidated_batch_data`:
+                * Extract the data slice for the current sample (`sample_item = batch_tensor[i]`).
+                * Check `sample_item.ndim`:
+                    * If `ndim >= 3`: Calculate GAP across spatial dimensions (`.mean(dim=tuple(range(1, sample_item.ndim)))`), convert the resulting channel-wise means tensor to a list, and store in `sample_data` under `'{layer_name}_pre_activation_avg'`.
+                    * If `ndim == 1`: Convert the vector tensor to a list and store under `'{layer_name}_pre_activation'`.
+                    * If `ndim == 0`: Get the scalar item and store under `'{layer_name}_pre_activation'`.
+                    * Handle other/unexpected dimensions with warnings and appropriate fallback (e.g., flatten or GAP over last dim).
+            * Append the `sample_data` dictionary to `self.extracted_data_list`.
+        * **(Optional) Batch Cleanup:** Delete intermediate tensors to free memory.
+    4.  **Final Output:** Convert the `self.extracted_data_list` (a list of dictionaries) into a `polars.DataFrame`. Attempt to reorder columns (`image_id`, `label`, followed by sorted activation columns). Return the DataFrame. Handle potential DataFrame creation errors by returning the raw list.
+
+## 6. Error Handling / Constraints
+
+* **Model Type:** Accepts `torch.nn.Module` or optionally `lightning.LightningModule` (if installed). Assumes standard forward pass behavior where hooks can intercept layer inputs.
+* **Error Handling:** Includes warnings for:
+    * Target layer names specified in `__init__` but not found in the model.
+    * Errors during the model's forward pass within `predict`.
+    * Unexpected tensor shapes encountered during pre-activation processing (GAP/vector conversion).
+    * Index errors when accessing labels or image IDs if batch structure/size mismatches.
+    * Errors during final Polars DataFrame creation (falls back to returning list).
+    * Does not perform deep validation of model structure compatibility beyond finding named layers.
+* **Data Consistency:** Assumes the dataloader yields batches with consistent structure (images first, optional labels second, optional IDs third) if `include_label` or `include_image_id` are True.
+* **Layer Naming:** The user **must** provide the correct, fully qualified names of the target layers as they appear in the output of `model.named_modules()`. Functionality hinges on these names being accurate.
+* **Memory/Efficiency:** Memory usage depends on the size of the pre-activation tensors being captured for the target layers and the batch size. GAP significantly reduces data size for multi-dimensional inputs compared to storing the full tensors. Performance depends on model inference speed and the number of targeted layers. Significantly more efficient than methods requiring gradient computation.
+* **Precision:** Captured tensors are typically moved to CPU as `float32`. Polars DataFrame columns storing lists or scalars will likely use `Float64`.
+
+## 7. Example Usage (Conceptual)
+
+```python
+import torch
+import torch.nn as nn
+import torchvision.models as models
+import polars as pl
+from torch.utils.data import DataLoader, TensorDataset
+
+# --- Assume model is setup (e.g., ResNet18) ---
+# model = models.resnet18(weights=None, num_classes=10)
+# # Modify input layer if needed (e.g., for MNIST):
+# # model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+# # model.load_state_dict(...) # Load trained weights
+# model.eval()
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# model.to(device)
+
+# --- Define target layer names ---
+# (Check model.named_modules() for exact names in your specific model)
+target_layers_for_resnet = [
+    'layer1',  # Input to block group 1
+    'layer4',  # Input to block group 4
+    'fc'       # Input to final fully connected layer
+]
+
+# --- Assume dataloader is setup ---
+# dummy_images = torch.randn(32, 3, 32, 32).to(device) # Example CIFAR-like
+# dummy_labels = torch.randint(0, 10, (32,))
+# dummy_dataset = TensorDataset(dummy_images, dummy_labels)
+# dataloader = DataLoader(dummy_dataset, batch_size=16)
+
+# --- Initialize the Scanner ---
+# Only need the model and the list of layer names
+scanner = NetworkScanner(model=model, target_layer_names=target_layers_for_resnet)
+
+# --- Run Prediction ---
+# Extracts pre-activations for 'layer1', 'layer4', and 'fc'
+# Assumes dataloader yields (images, labels), so include_image_id=False is appropriate
+results_df = scanner.predict(dataloader=dataloader, include_label=True, include_image_id=False)
+
+# --- Inspect Results ---
+print(results_df.shape)
+print(results_df.columns)
+# Expected columns might be:
+# ['label', 'fc_pre_activation', 'layer1_pre_activation_avg', 'layer4_pre_activation_avg']
+# (Order might vary slightly before final selection step)
+
+# 'fc_pre_activation' column contains lists (vectors input to fc)
+# '_avg' columns contain lists (GAPped vectors, one value per channel)
+print(results_df.head())

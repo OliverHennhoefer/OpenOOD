@@ -9,7 +9,7 @@ from openood.postprocessors import (
     GradNormPostprocessor, GRAMPostprocessor, KLMatchingPostprocessor,
     KNNPostprocessor, MaxLogitPostprocessor, MCDPostprocessor,
     MDSPostprocessor, MDSEnsemblePostprocessor, MOSPostprocessor,
-    ODINPostprocessor, OpenGanPostprocessor, OpenMax, PatchcorePostprocessor,
+    ODINPostprocessor, OpenGanPostprocessor, PatchcorePostprocessor,
     Rd4adPostprocessor, ReactPostprocessor, ResidualPostprocessor,
     ScalePostprocessor, SSDPostprocessor, TemperatureScalingPostprocessor,
     VIMPostprocessor, RotPredPostprocessor, RankFeatPostprocessor,
@@ -17,6 +17,7 @@ from openood.postprocessors import (
     GENPostprocessor, NNGuidePostprocessor, RelationPostprocessor,
     T2FNormPostprocessor, ReweightOODPostprocessor, fDBDPostprocessor,
     AdaScalePostprocessor, IODINPostprocessor, NCIPostprocessor)
+from openood.postprocessors.lipro_postprocessor import LikelihoodProfilingPostprocessor
 from openood.utils.config import Config, merge_configs
 
 postprocessors = {
@@ -35,7 +36,6 @@ postprocessors = {
     'rmds': RMDSPostprocessor,
     'gmm': GMMPostprocessor,
     'patchcore': PatchcorePostprocessor,
-    'openmax': OpenMax,
     'react': ReactPostprocessor,
     'vim': VIMPostprocessor,
     'gradnorm': GradNormPostprocessor,
@@ -55,6 +55,7 @@ postprocessors = {
     'mcd': MCDPostprocessor,
     'opengan': OpenGanPostprocessor,
     'knn': KNNPostprocessor,
+    'lipro': LikelihoodProfilingPostprocessor,
     'dice': DICEPostprocessor,
     'scale': ScalePostprocessor,
     'ssd': SSDPostprocessor,
