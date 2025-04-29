@@ -10,7 +10,7 @@ _test_*
 data
 data/
 results/
-checkpoints/
+results/checkpoints/
 ipynb_checkpoints/
 
 # Byte-compiled / optimized / DLL files

@@ -16,7 +16,7 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
     def __init__(self, config):
         super(LikelihoodProfilingPostprocessor, self).__init__(config)
 
-        self.target_layer_names: list = ["layer4.1.conv1", "layer4.1.conv2", "fc"]
+        self.target_layer_names: list = ["layer4.0.conv1", "layer4.0.conv2", "layer4.1.conv1", "layer4.1.conv2", "fc"]
         self.inference_layer_names: list | None = None
 
         self.APS_mode: bool = False
@@ -42,13 +42,12 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
 
         col_dis_discr.write_csv('discr.csv')
 
-        selector = ScreeCutoffSelector(sensitivity=0.1)
-        cutoff_id = selector.propose_cutoff(
-            col_dis_discr, value_col="average_divergence", method="kneedle"
-        )
+        #selector = ScreeCutoffSelector(sensitivity=0.1)
+        #cutoff_id = selector.propose_cutoff(
+        #    col_dis_discr, value_col="average_divergence", method="kneedle"
+        #)
 
-        first_n_cols = col_dis_discr.head(cutoff_id)
-        first_n_cols = first_n_cols.select("column")
+        first_n_cols = col_dis_discr.head(100).select("column")
         self.inference_layer_names = first_n_cols.get_column("column").to_list()
 
         scan_subset = scan.select(self.inference_layer_names)
@@ -70,6 +69,7 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
         ]
 
         logits_tensor = torch.tensor(output)
-        pred = torch.softmax(logits_tensor, dim=1).tolist()
+        prob = torch.softmax(logits_tensor, dim=1)
+        pred = torch.argmax(prob, dim=1).tolist()
 
         return pred, class_ll, torch.cat(all_labels, dim=0).tolist()

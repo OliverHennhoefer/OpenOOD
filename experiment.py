@@ -1,4 +1,7 @@
 from multiprocessing import freeze_support
+
+import torch
+
 from openood.evaluation_api import Evaluator
 from openood.networks import ResNet18_32x32
 from openood.postprocessors import LikelihoodProfilingPostprocessor
@@ -6,9 +9,13 @@ from openood.postprocessors import LikelihoodProfilingPostprocessor
 if __name__ == "__main__":
     freeze_support()
     net = ResNet18_32x32(num_classes=10)
+    net.load_state_dict(
+        torch.load('results/checkpoints/cifar10_resnet18_32x32_base_e100_lr0.1_default/s0/best.ckpt',
+                   map_location=torch.device('cpu'))
+    )
 
-    # for name, module in net.named_modules():
-    #    print(name, "->", module)
+    for name, module in net.named_modules():
+        print(name, "->", module)
 
     lipro = LikelihoodProfilingPostprocessor(config={})
     evaluator = Evaluator(
