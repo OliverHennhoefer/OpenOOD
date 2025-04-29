@@ -23,3 +23,6 @@ if __name__ == "__main__":
         shuffle=False,
         num_workers=2,
     )  # could use more num_workers outside colab
+
+    metrics = evaluator.eval_ood(fsood=False)
+    print(metrics)

@@ -1,5 +1,6 @@
 # PyCharm
 .idea
+*.csv
 
 # ignore some temp/test files
 _test_*
