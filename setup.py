@@ -16,7 +16,6 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     install_requires=[
         'torch>=1.13.1',
-        'numpy~=2',
         'torchvision>=0.13',
         'scikit-learn',
         'json5',
@@ -30,7 +29,7 @@ setuptools.setup(
         'pandas',
         'diffdist>=0.1',
         'Cython>=0.29.30',
-        'faiss-gpu>=1.7.2',
+        'faiss-cpu',
         'gdown>=4.7.1',  # 'libmr>=0.1.9'
     ],
     classifiers=[
