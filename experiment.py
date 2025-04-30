@@ -4,7 +4,7 @@ import torch
 
 from openood.evaluation_api import Evaluator
 from openood.networks import ResNet18_32x32
-from openood.postprocessors import LikelihoodProfilingPostprocessor
+from openood.postprocessors import LikelihoodProfilingPostprocessor, TemperatureScalingPostprocessor
 
 if __name__ == "__main__":
     freeze_support()
@@ -14,8 +14,8 @@ if __name__ == "__main__":
                    map_location=torch.device('cpu'))
     )
 
-    for name, module in net.named_modules():
-        print(name, "->", module)
+    #for name, module in net.named_modules():
+    #    print(name, "->", module)
 
     lipro = LikelihoodProfilingPostprocessor(config={})
     evaluator = Evaluator(

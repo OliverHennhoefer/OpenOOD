@@ -1,6 +1,7 @@
 # PyCharm
 .idea
 *.csv
+*.parquet
 
 # ignore some temp/test files
 _test_*
