@@ -1,11 +1,13 @@
 library(arrow)
+library(ggplot2)
 
-scan <- arrow::read_parquet("C:/Users/heol/Projects/OpenOOD/1_scan.csv")
-disc <- arrow::read_parquet("C:/Users/heol/Projects/OpenOOD/2_disc.parquet")
+scan <- arrow::read_parquet("C:/Users/heol/Projects/OpenOOD/1_scan.parquet")
+disc <- arrow::read_parquet("C:/Users/heol/Projects/OpenOOD/2_discr.parquet")
 resl <- arrow::read_parquet("C:/Users/heol/Projects/OpenOOD/3_result.parquet")
 
-coi <- scan$relu1_relevance_avg_4  #relu3_pre_activation_55  #relu3_pre_activation_11
-ggplot(scan, aes(x = coi, fill = group)) +
+scan$label <- as.factor(scan$label)
+coi <- scan$layer4.1.conv2_layer_output_avg_317
+ggplot(scan, aes(x = coi, fill = label)) +
   geom_histogram(alpha = 0.7, position = "identity", bins = 100) +
   facet_wrap(~ label, scales = "fixed") +  # Use free_y to adjust y-axis for each facet
   geom_vline(xintercept = quantile(coi, 0.1), linetype = "dashed", color = "black") +

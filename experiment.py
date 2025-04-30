@@ -17,15 +17,15 @@ if __name__ == "__main__":
     #for name, module in net.named_modules():
     #    print(name, "->", module)
 
-    lipro = LikelihoodProfilingPostprocessor(config={})
+    lipro = LikelihoodProfilingPostprocessor(config={'first_n': 15})  # 15, 30
     evaluator = Evaluator(
         net,
         id_name="cifar10",  # the target ID dataset
         data_root="./data",  # change if necessary
-        config_root="./config/postprocessors/lipro.yml",  # see notes above
+        config_root='./configs',#"./config/postprocessors/lipro.yml",  # see notes above
         preprocessor=None,  # default preprocessing for the target ID dataset
-        postprocessor_name=None,  # the postprocessor to use
-        postprocessor=lipro,  # if you want to use your own postprocessor
+        postprocessor_name='lipro',  # the postprocessor to use
+        postprocessor=None,  # if you want to use your own postprocessor
         batch_size=256,  # for certain methods the results can be slightly affected by batch size
         shuffle=False,
         num_workers=2,

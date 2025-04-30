@@ -27,8 +27,8 @@ class BasePostprocessor:
         for batch in tqdm(
             data_loader, disable=not progress or not comm.is_main_process()
         ):
-            data = batch["data"].cuda()
-            label = batch["label"].cuda()
+            data = batch["data"]#.cuda()
+            label = batch["label"]#.cuda()
             pred, conf = self.postprocess(net, data)
 
             pred_list.append(pred.cpu())

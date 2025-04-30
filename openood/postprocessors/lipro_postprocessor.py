@@ -62,12 +62,15 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
 
         col_dis_discr.write_parquet('2_discr.parquet')
 
-        selector = ScreeCutoffSelector(sensitivity=0.1)
-        cutoff_id = selector.propose_cutoff(
-            col_dis_discr, value_col="average_divergence", method="kneedle"
-        )
+        if "first_n" in self.config:
+            select_first_n = self.config['first_n']
+        else:
+            selector = ScreeCutoffSelector(sensitivity=0.1)
+            select_first_n = selector.propose_cutoff(
+                col_dis_discr, value_col="average_divergence", method="kneedle"
+            )
 
-        first_n_cols = col_dis_discr.head(cutoff_id).select("column")
+        first_n_cols = col_dis_discr.head(select_first_n).select("column")
         self.inference_layer_names = first_n_cols.get_column("column").to_list()
 
         scan_subset = scan.select(self.inference_layer_names)
