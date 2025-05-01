@@ -40,6 +40,7 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
         self.inference_layer_names: list | None = None
 
         self.APS_mode: bool = False
+        self.config = config
 
         self.dw_kde = DimensionWiseKdeOOD()
         self.reference_activations: polars.DataFrame | None = None
@@ -62,13 +63,15 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
 
         col_dis_discr.write_parquet('2_discr.parquet')
 
-        if "first_n" in self.config:
-            select_first_n = self.config['first_n']
+        if "first_n" in self.config.get("postprocessor", {}):
+            select_first_n = self.config["postprocessor"]["first_n"]
+            print(f"Configured to take first {select_first_n} most discriminant columns.")
         else:
             selector = ScreeCutoffSelector(sensitivity=0.1)
             select_first_n = selector.propose_cutoff(
                 col_dis_discr, value_col="average_divergence", method="kneedle"
             )
+            print(f"Using ScreeCutoffSelector to take first {select_first_n} most discriminant columns.")
 
         first_n_cols = col_dis_discr.head(select_first_n).select("column")
         self.inference_layer_names = first_n_cols.get_column("column").to_list()

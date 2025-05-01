@@ -1,3 +1,4 @@
 postprocessor:
   name: lipro
   APS_mode: False
+  first_n: 10

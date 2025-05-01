@@ -37,7 +37,7 @@ class BasePostprocessor:
 
         # convert values into numpy array
         pred_list = torch.cat(pred_list).numpy().astype(int)
-        conf_list = torch.cat(conf_list).numpy()
+        conf_list = torch.cat(conf_list).detach().numpy()
         label_list = torch.cat(label_list).numpy().astype(int)
 
         return pred_list, conf_list, label_list

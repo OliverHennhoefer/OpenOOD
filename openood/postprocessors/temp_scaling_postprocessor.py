@@ -15,7 +15,7 @@ class TemperatureScalingPostprocessor(BasePostprocessor):
         super(TemperatureScalingPostprocessor, self).__init__(config)
         self.config = config
         self.temperature = nn.Parameter(
-            torch.ones(1, device="cuda") * 1.5
+            torch.ones(1, device="cpu") * 1.5
         )  # initialize T
         self.setup_flag = False
 
@@ -31,14 +31,14 @@ class TemperatureScalingPostprocessor(BasePostprocessor):
             labels_list = []
             with torch.no_grad():  # fix other params of the net, only learn temperature
                 for batch in tqdm(val_dl):
-                    data = batch["data"].cuda()
+                    data = batch["data"]#.cuda()
                     labels = batch["label"]
                     logits = net(data)
                     logits_list.append(logits)
                     labels_list.append(labels)
                 # convert a list of many tensors (each of a batch) to one tensor
-                logits = torch.cat(logits_list).cuda()
-                labels = torch.cat(labels_list).cuda()
+                logits = torch.cat(logits_list)#.cuda()
+                labels = torch.cat(labels_list)#.cuda()
                 # calculate NLL before temperature scaling
                 before_temperature_nll = nll_criterion(logits, labels)
 

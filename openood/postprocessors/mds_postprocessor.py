@@ -28,7 +28,7 @@ class MDSPostprocessor(BasePostprocessor):
                 for batch in tqdm(
                     id_loader_dict["train"], desc="Setup: ", position=0, leave=True
                 ):
-                    data, labels = batch["data"].cuda(), batch["label"]
+                    data, labels = batch["data"], batch["label"]
                     logits, features = net(data, return_feature=True)
                     all_feats.append(features.cpu())
                     all_labels.append(deepcopy(labels))

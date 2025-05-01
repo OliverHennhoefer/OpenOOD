@@ -60,7 +60,7 @@ class GMMPostprocessor(BasePostprocessor):
                 score_list = score.view([-1, 1])
             else:
                 score_list = torch.cat((score_list, score.view([-1, 1])), 1)
-        alpha = torch.cuda.FloatTensor(self.alpha_list)
+        alpha = torch.FloatTensor(self.alpha_list)
         # import pdb; pdb.set_trace();
         # conf = torch.matmul(score_list, alpha)
         conf = torch.matmul(torch.log(score_list + 1e-45), alpha)
@@ -91,7 +91,7 @@ def get_GMM_stat(
     label_list = []
     # collect features
     for batch in tqdm(train_loader, desc="Compute GMM Stats [Collecting]"):
-        data = batch["data_aux"].cuda()
+        data = batch["data_aux"]#.cuda()
         label = batch["label"]
         _, feature_list = model(data, return_feature_list=True)
         label_list.extend(tensor2list(label))
@@ -122,10 +122,10 @@ def get_GMM_stat(
         feature_prec = gm.precisions_
         component_weight = gm.weights_
 
-        feature_mean_list.append(torch.Tensor(feature_mean).cuda())
-        feature_prec_list.append(torch.Tensor(feature_prec).cuda())
-        component_weight_list.append(torch.Tensor(component_weight).cuda())
-        transform_matrix_list.append(torch.Tensor(transform_matrix).cuda())
+        feature_mean_list.append(torch.Tensor(feature_mean))#.cuda())
+        feature_prec_list.append(torch.Tensor(feature_prec))#.cuda())
+        component_weight_list.append(torch.Tensor(component_weight))#.cuda())
+        transform_matrix_list.append(torch.Tensor(transform_matrix))#.cuda())
 
     return (
         feature_mean_list,

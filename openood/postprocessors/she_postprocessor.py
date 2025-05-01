@@ -39,7 +39,7 @@ class SHEPostprocessor(BasePostprocessor):
                 for batch in tqdm(
                     id_loader_dict["train"], desc="Eval: ", position=0, leave=True
                 ):
-                    data = batch["data"].cuda()
+                    data = batch["data"]#.cuda()
                     labels = batch["label"]
                     all_labels.append(deepcopy(labels))
 
@@ -59,7 +59,7 @@ class SHEPostprocessor(BasePostprocessor):
                     class_correct_activations.mean(0, keepdim=True)
                 )
 
-            self.activation_log = torch.cat(self.activation_log).cuda()
+            self.activation_log = torch.cat(self.activation_log)#.cuda()
             self.setup_flag = True
         else:
             pass

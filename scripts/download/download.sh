@@ -1,4 +1,4 @@
-# sh ./scripts/download/dowanload.sh
+# py scripts/download/download.py
 
 # download the up-to-date benchmarks and checkpoints
 # provided by OpenOOD v1.5

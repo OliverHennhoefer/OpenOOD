@@ -46,7 +46,7 @@ class GRAMPostprocessor(BasePostprocessor):
 
 
 def tensor2list(x):
-    return x.data.cuda().tolist()
+    return x.data.tolist()
 
 
 @torch.no_grad()
@@ -73,7 +73,7 @@ def sample_estimator(model, train_loader, num_classes, powers):
 
     # collect features and compute gram metrix
     for batch in tqdm(train_loader, desc="Compute min/max"):
-        data = batch["data"].cuda()
+        data = batch["data"]#.cuda()
         label = batch["label"]
         _, feature_list = model(data, return_feature_list=True)
         label_list = tensor2list(label)

@@ -4,7 +4,6 @@ import torch
 
 from openood.evaluation_api import Evaluator
 from openood.networks import ResNet18_32x32
-from openood.postprocessors import LikelihoodProfilingPostprocessor, TemperatureScalingPostprocessor
 
 if __name__ == "__main__":
     freeze_support()
@@ -17,14 +16,13 @@ if __name__ == "__main__":
     #for name, module in net.named_modules():
     #    print(name, "->", module)
 
-    lipro = LikelihoodProfilingPostprocessor(config={'first_n': 15})  # 15, 30
     evaluator = Evaluator(
         net,
         id_name="cifar10",  # the target ID dataset
         data_root="./data",  # change if necessary
         config_root='./configs',#"./config/postprocessors/lipro.yml",  # see notes above
         preprocessor=None,  # default preprocessing for the target ID dataset
-        postprocessor_name='lipro',  # the postprocessor to use
+        postprocessor_name='gram',  # the postprocessor to use
         postprocessor=None,  # if you want to use your own postprocessor
         batch_size=256,  # for certain methods the results can be slightly affected by batch size
         shuffle=False,

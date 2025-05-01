@@ -24,7 +24,7 @@ class ReactPostprocessor(BasePostprocessor):
                 for batch in tqdm(
                     id_loader_dict["val"], desc="Setup: ", position=0, leave=True
                 ):
-                    data = batch["data"].cuda()
+                    data = batch["data"]#.cuda()
                     data = data.float()
 
                     _, feature = net(data, return_feature=True)

@@ -118,7 +118,7 @@ class MDSEnsemblePostprocessor(BasePostprocessor):
                 score_list = score.view([-1, 1])
             else:
                 score_list = torch.cat((score_list, score.view([-1, 1])), 1)
-        alpha = torch.cuda.FloatTensor(self.alpha_list)
+        alpha = torch.FloatTensor(self.alpha_list)
         conf = torch.matmul(score_list, alpha)
         return pred, conf
 
@@ -197,7 +197,7 @@ def get_MDS_stat(model, train_loader, num_classes, feature_type_list, reduce_dim
     label_list = []
     # collect features
     for batch in tqdm(train_loader, desc="Compute mean/std"):
-        data = batch["data_aux"].cuda()
+        data = batch["data_aux"]#.cuda()
         label = batch["label"]
         _, feature_list = model(data, return_feature_list=True)
         label_list.extend(tensor2list(label))
@@ -218,7 +218,7 @@ def get_MDS_stat(model, train_loader, num_classes, feature_type_list, reduce_dim
         transform_matrix = reduce_feature_dim(
             feature_sub, label_list, reduce_dim_list[layer_idx]
         )
-        transform_matrix_list.append(torch.Tensor(transform_matrix).cuda())
+        transform_matrix_list.append(torch.Tensor(transform_matrix))#.cuda())
         feature_sub = np.dot(feature_sub, transform_matrix)
         for feature, label in zip(feature_sub, label_list):
             feature = feature.reshape([-1, len(feature)])
@@ -247,8 +247,8 @@ def get_MDS_stat(model, train_loader, num_classes, feature_type_list, reduce_dim
         precision_list.append(precision)
 
     # put mean and precision to cuda
-    feature_mean_list = [torch.Tensor(i).cuda() for i in feature_mean_list]
-    precision_list = [torch.Tensor(p).cuda() for p in precision_list]
+    feature_mean_list = [torch.Tensor(i).cpu() for i in feature_mean_list]
+    precision_list = [torch.Tensor(p).cpu() for p in precision_list]
 
     return feature_mean_list, precision_list, transform_matrix_list
 
@@ -273,7 +273,7 @@ def get_Mahalanobis_scores(
     for batch in tqdm(
         test_loader, desc=f"{test_loader.dataset.name}_layer{layer_index}"
     ):
-        data = batch["data"].cuda()
+        data = batch["data"].cpu()
         data = Variable(data, requires_grad=True)
         noise_gaussian_score = compute_Mahalanobis_score(
             model,
@@ -341,18 +341,18 @@ def compute_Mahalanobis_score(
     # here we use the default value of 0.5
     gradient.index_copy_(
         1,
-        torch.LongTensor([0]).cuda(),
-        gradient.index_select(1, torch.LongTensor([0]).cuda()) / 0.5,
+        torch.LongTensor([0]).cpu(),
+        gradient.index_select(1, torch.LongTensor([0]).cpu()) / 0.5,
     )
     gradient.index_copy_(
         1,
-        torch.LongTensor([1]).cuda(),
-        gradient.index_select(1, torch.LongTensor([1]).cuda()) / 0.5,
+        torch.LongTensor([1]).cpu(),
+        gradient.index_select(1, torch.LongTensor([1]).cpu()) / 0.5,
     )
     gradient.index_copy_(
         1,
-        torch.LongTensor([2]).cuda(),
-        gradient.index_select(1, torch.LongTensor([2]).cuda()) / 0.5,
+        torch.LongTensor([2]).cpu(),
+        gradient.index_select(1, torch.LongTensor([2]).cpu()) / 0.5,
     )
     tempInputs = torch.add(
         data.data, gradient, alpha=-magnitude
