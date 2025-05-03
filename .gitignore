@@ -2,6 +2,8 @@
 .idea
 *.csv
 *.parquet
+.RData
+.Rhistory
 
 # ignore some temp/test files
 _test_*
