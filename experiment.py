@@ -13,19 +13,19 @@ if __name__ == "__main__":
     #    print(name, "->", module)
 
     methods = [
-        "ash",
-        "ebo",
+        #"ash",
+        #"ebo",  # neds third run
         #"gmm",
         #"knn"
         #"lipro"
-        "mds_ensemble",
         #"odin"
-        "react",
-        "she",
-        "temp_scaling",
+        #"react",
+        #"she",
+        #"temp_scaling",
         "gen",
         "gram",
-        "rmds"
+        "rmds",
+        "mds_ensemble"
     ]
 
     setup = "cifar10"

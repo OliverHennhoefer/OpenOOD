@@ -4,6 +4,7 @@
 *.parquet
 .RData
 .Rhistory
+!results/eval/**
 
 # ignore some temp/test files
 _test_*
@@ -12,7 +13,6 @@ _test_*
 # ignore data and output directory
 data
 data/
-results/
 results/checkpoints/
 ipynb_checkpoints/
 
