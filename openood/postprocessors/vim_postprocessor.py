@@ -30,7 +30,7 @@ class VIMPostprocessor(BasePostprocessor):
                 for batch in tqdm(
                     id_loader_dict["train"], desc="Setup: ", position=0, leave=True
                 ):
-                    data = batch["data"].cuda()
+                    data = batch["data"]#.cuda()
                     data = data.float()
                     _, feature = net(data, return_feature=True)
                     feature_id_train.append(feature.cpu().numpy())

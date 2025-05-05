@@ -14,28 +14,47 @@ if __name__ == "__main__":
 
     methods = [
         #"ash",
-        #"ebo",  # neds third run
-        #"gmm",
-        #"knn"
-        #"lipro"
+        #"ebo",
+        #"knn",
+        #"lipro",
         #"odin"
         #"react",
         #"she",
         #"temp_scaling",
-        "gen",
-        "gram",
-        "rmds",
-        "mds_ensemble"
+        #"gen",
+        #"gram",
+        #"rmds",
+        #"mds_ensemble",
+        #"cutpaste",
+        #"cider"
+        #"draem",
+        #"dropout",
+        #"fdbd",
+        #"godin",
+        #"gradnorm"
+        #"iodin",
+        #"kdad",
+        #"mls"
+        #"mcd",
+        #"vim"
+        #"klm"
+        #"mds"
+        #"dice"
+        #"rankfeat"
+        #"msp"
+        #"
+        # opengan"
     ]
 
-    setup = "cifar10"
-    chkpt = "cifar10_resnet18_32x32_base_e100_lr0.1_default"
+    setup = "cifar100"
+    chkpt = "cifar100_resnet18_32x32_base_e100_lr0.1_default"
+    num_c = 100
 
     for method in methods:
 
         for chkpt_id in [0, 1, 2]:
 
-            net = ResNet18_32x32(num_classes=10)
+            net = ResNet18_32x32(num_classes=num_c)
             net.load_state_dict(
                 torch.load(f'results/checkpoints/{chkpt}/s{chkpt_id}/best.ckpt',
                            map_location=torch.device('cpu'))
@@ -43,7 +62,7 @@ if __name__ == "__main__":
 
             evaluator = Evaluator(
                 net,
-                id_name="cifar10",  # the target ID dataset
+                id_name=setup,  # the target ID dataset
                 data_root="./data",  # change if necessary
                 config_root='./configs',#"./config/postprocessors/lipro.yml",  # see notes above
                 preprocessor=None,  # default preprocessing for the target ID dataset

@@ -19,9 +19,9 @@ class GradNormPostprocessor(BasePostprocessor):
         fc = torch.nn.Linear(*w.shape[::-1])
         fc.weight.data[...] = torch.from_numpy(w)
         fc.bias.data[...] = torch.from_numpy(b)
-        fc.cuda()
+        #fc.cuda()
 
-        targets = torch.ones((1, self.num_classes)).cuda()
+        targets = torch.ones((1, self.num_classes))#.cuda()
 
         confs = []
         for i in x:
