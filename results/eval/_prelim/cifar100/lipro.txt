@@ -2,6 +2,10 @@ n=100
 Computing metrics on cifar10 dataset...
 FPR@95: 68.89, AUROC: 75.87 AUPR_IN: 75.09, AUPR_OUT: 73.79
 
+n=50
+Computing metrics on cifar10 dataset...
+FPR@95: 74.44, AUROC: 63.06 AUPR_IN: 66.26, AUPR_OUT: 61.24
+
 n=20
 Computing metrics on cifar10 dataset...
 FPR@95: 87.54, AUROC: 54.42 AUPR_IN: 54.82, AUPR_OUT: 57.26

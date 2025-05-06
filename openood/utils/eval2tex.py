@@ -166,8 +166,8 @@ def generate_latex_table_rows(output_cols):
 
 # --- Main execution block ---
 if __name__ == "__main__":
-    desired_columns = ["AUPR_IN", "AUPR_OUT"]
-    #desired_columns = ["FPR@95", "AUROC", "AUPR_IN"]
+    #desired_columns = ["AUPR_IN", "AUPR_OUT"]
+    desired_columns = ["FPR@95", "AUROC", "AUPR_IN"]
 
     print(f"Requesting columns: {desired_columns}")
     generate_latex_table_rows(output_cols=desired_columns)
