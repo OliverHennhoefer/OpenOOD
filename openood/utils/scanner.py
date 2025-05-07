@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 import torch
-import polars
+import polars  # Using 'polars' as per original, user can alias as 'pl' if preferred
 import warnings
 import torch.nn as nn
 from tqdm import tqdm
 from collections import defaultdict
 from torch.utils.data import DataLoader
-from typing import List, Dict, Any, Tuple, Union, Optional, Literal # Added Literal
-import traceback
+from typing import List, Dict, Any, Tuple, Union, Optional, Literal
+import traceback  # Kept for the final try-except during DataFrame creation
+
 
 class NetworkScanner:
     """
@@ -29,298 +30,308 @@ class NetworkScanner:
     """
 
     def __init__(
-        self,
-        model: nn.Module,
-        target_layer_names: List[str],
-        # <<< NEW: Capture mode >>>
-        capture_mode: Literal['input', 'output'] = 'output'
+            self,
+            model: nn.Module,
+            target_layer_names: List[str],
+            capture_mode: Literal['input', 'output'] = 'output'
     ):
-        """
-        Args:
-            model: Pre-trained PyTorch model (nn.Module).
-            target_layer_names: List of layer names whose inputs or outputs
-                                should be captured.
-            capture_mode (Literal['input', 'output']):
-                - 'input': Capture the input tensor(s) passed to the layer's forward().
-                           Default. Use for capturing pre-activation data by targeting
-                           the activation layer (e.g., nn.ReLU).
-                - 'output': Capture the output tensor(s) from the layer's forward().
-                            Use for capturing post-Linear/Conv data by targeting
-                            the Linear/Conv layer itself.
-        """
         self.model = model
-        self.model.eval()
+        self.model.eval()  # Set model to evaluation mode
         self.capture_mode = capture_mode
-        self.data_suffix = "_layer_input" if capture_mode == 'input' else "_layer_output" # <<< Adjust suffix based on mode
+        # Suffix for captured data columns, determined by capture_mode
+        self.data_suffix = "_layer_input" if capture_mode == 'input' else "_layer_output"
 
-        # ... (rest of __init__ is the same as before) ...
         try:
             self.device = next(self.model.parameters()).device
-        except StopIteration:
-            warnings.warn("Model has no parameters. Assuming CPU.", UserWarning)
+        except StopIteration:  # Model has no parameters
+            warnings.warn("Model has no parameters. Assuming CPU.", UserWarning, stacklevel=2)
             self.device = torch.device("cpu")
-        self.model.to(self.device)
+        self.model.to(self.device)  # Ensure model is on the correct device
 
         self.target_layer_names = target_layer_names
-        self.target_modules: Dict[str, nn.Module] = {}
+        self.target_modules: Dict[str, nn.Module] = {}  # Stores references to target nn.Module objects
 
         if self.target_layer_names:
             self._identify_target_modules()
             if not self.target_modules:
-                 warnings.warn(
+                warnings.warn(
                     "None of the specified `target_layer_names` were found in the model. "
-                    "Only model outputs will be collected.", UserWarning
-                 )
-        else:
-             warnings.warn(
+                    "Only model outputs will be collected.", UserWarning, stacklevel=2
+                )
+        else:  # Empty target_layer_names
+            warnings.warn(
                 "`target_layer_names` is empty. Only model outputs will be collected.",
-                UserWarning
+                UserWarning, stacklevel=2
             )
 
+        # These will be populated during predict() and reset for each call
         self.extracted_data_list: List[Dict[str, Any]] = []
         self._hook_handles: List[torch.utils.hooks.RemovableHandle] = []
         self.model_outputs_list: List[Any] = []
 
-
     def _identify_target_modules(self):
-        # ... (same as before) ...
+        """Identifies and stores references to the target nn.Module objects."""
+        target_layer_names_set = set(self.target_layer_names)
         found_names = set()
         for name, module in self.model.named_modules():
-            if name in self.target_layer_names:
+            if name in target_layer_names_set:
                 self.target_modules[name] = module
                 found_names.add(name)
-        missing_names = set(self.target_layer_names) - found_names
+                if len(found_names) == len(target_layer_names_set):  # Early exit if all found
+                    break
+
+        missing_names = target_layer_names_set - found_names
         if missing_names:
             warnings.warn(
-                f"Target layers specified but not found in model: {missing_names}. They will be ignored.", UserWarning
+                f"Target layers specified but not found in model: {list(missing_names)}. They will be ignored.",
+                UserWarning, stacklevel=2
             )
 
     def _clear_hooks(self):
-        # ... (same as before) ...
+        """Removes all registered PyTorch hooks."""
         for handle in self._hook_handles:
             handle.remove()
         self._hook_handles.clear()
 
     def predict(
-        # ... (arguments are the same, except maybe adjust docstring for data name) ...
-        self,
-        dataloader: DataLoader,
-        include_label: bool = True,
-        include_image_id: bool = True,
-        image_key: str = "data",
-        label_key: str = "label",
-        id_key: str = "index",
-        apply_gap_to_high_dim: bool = True,
+            self,
+            dataloader: DataLoader,
+            include_label: bool = True,
+            include_image_id: bool = True,
+            image_key: str = "data",  # Key for image tensor in batch dict
+            label_key: str = "label",  # Key for label in batch dict
+            id_key: str = "index",  # Key for image ID in batch dict
+            apply_gap_to_high_dim: bool = True,  # Apply Global Average Pooling to >2D tensors
     ) -> Tuple[Union[polars.DataFrame, List[Dict[str, Any]]], List[Any]]:
-        # ... (initial setup is the same) ...
-        self.extracted_data_list = []
-        self.model_outputs_list = []
-        self.model.eval()
-        self.model.to(self.device)
-        batch_num = 0
+        """
+        Processes data through the model, captures layer data, and model outputs.
+        """
+        self.extracted_data_list = []  # Reset for current prediction run
+        self.model_outputs_list = []  # Reset for current prediction run
+
+        self.model.eval()  # Ensure model is in eval mode
+
         hooks_needed = bool(self.target_modules)
-        iterator = tqdm(dataloader, desc="Scanning Batches")
-        final_id_col_name = id_key
+        final_id_col_name = id_key  # Use user-specified id_key as the column name in DataFrame
 
-        for batch in iterator:
-             # ... (batch setup is the same) ...
-            batch_num += 1
-            images = None
-            labels_batch = None
-            image_ids_batch = None
+        iterator = tqdm(dataloader, desc="Scanning Batches", leave=False)
+        for batch_idx, batch in enumerate(iterator):
+            images: Optional[torch.Tensor] = None
+            labels_batch: Optional[Union[torch.Tensor, List[Any]]] = None
+            image_ids_batch: Optional[Union[torch.Tensor, List[Any]]] = None
             batch_size = 0
-            if isinstance(batch, (list, tuple)): # Simplified batch setup
-                if not batch: continue
-                try: images = batch[0].to(self.device); batch_size = images.shape[0]
-                except (IndexError, AttributeError, TypeError, RuntimeError): continue # Basic check
-            elif isinstance(batch, dict):
-                try: images = batch[image_key].to(self.device); batch_size = images.shape[0]
-                except (KeyError, AttributeError, TypeError, RuntimeError): continue # Basic check
-            else: continue
-            if images is None or batch_size == 0: continue
-            if include_label: labels_batch = batch[1] if isinstance(batch, (list, tuple)) and len(batch) > 1 else batch.get(label_key) if isinstance(batch, dict) else None
-            if include_image_id: image_ids_batch = batch[2] if isinstance(batch, (list, tuple)) and len(batch) > 2 else batch.get(id_key) if isinstance(batch, dict) else None
-            if labels_batch is not None and isinstance(labels_batch, torch.Tensor): labels_batch = labels_batch.cpu()
-            if image_ids_batch is not None and isinstance(image_ids_batch, torch.Tensor): image_ids_batch = image_ids_batch.cpu()
 
-            batch_storage = defaultdict(list)
-            self._hook_handles = []
+            # --- 1. Batch Data Extraction ---
+            if isinstance(batch, dict):  # Batch is a dictionary
+                images = batch.get(image_key)
+                if include_label: labels_batch = batch.get(label_key)
+                if include_image_id: image_ids_batch = batch.get(id_key)
+            elif isinstance(batch, (list, tuple)) and len(batch) > 0:  # Batch is a list/tuple
+                images = batch[0]
+                if include_label and len(batch) > 1: labels_batch = batch[1]
+                if include_image_id and len(batch) > 2: image_ids_batch = batch[2]
+            else:  # Unsupported batch type
+                continue  # Skip to next batch
 
-            # --- 3. Hook Registration ---
+            if images is None:  # Images not found in batch
+                continue
+
+            try:  # Ensure images is a tensor and move to device
+                images = images.to(self.device)
+                batch_size = images.shape[0]
+                if batch_size == 0: continue  # Skip empty batch
+            except (AttributeError, TypeError, RuntimeError) as e:
+                warnings.warn(f"Failed to process images for batch {batch_idx}: {e}. Skipping batch.", RuntimeWarning,
+                              stacklevel=2)
+                continue
+
+            # Move labels/IDs to CPU and convert to list later if they are tensors
+            if labels_batch is not None and isinstance(labels_batch, torch.Tensor):
+                labels_batch = labels_batch.cpu()
+            if image_ids_batch is not None and isinstance(image_ids_batch, torch.Tensor):
+                image_ids_batch = image_ids_batch.cpu()
+
+            # --- 2. Hook Setup ---
+            batch_storage = defaultdict(list)  # Temporary storage for hooked tensors for this batch
+            self._hook_handles.clear()  # Clear any stale handles from previous iterations (shouldn't be any if logic is correct)
+
             if hooks_needed:
                 def create_forward_hook(layer_name: str):
-                    def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor, ...], output: Any):
+                    # Closure to capture layer_name
+                    def forward_hook(_module: nn.Module, inputs: Tuple[torch.Tensor, ...], output: Any):
                         tensor_to_capture = None
-                        # <<< MODIFIED: Choose input or output based on mode >>>
                         if self.capture_mode == 'input':
                             if inputs and isinstance(inputs[0], torch.Tensor):
                                 tensor_to_capture = inputs[0]
-                            # else: Optional warning
-                        elif self.capture_mode == 'output':
-                             # Output might be a tensor or a tuple/list containing tensors
-                             if isinstance(output, torch.Tensor):
-                                 tensor_to_capture = output
-                             elif isinstance(output, (tuple, list)) and output and isinstance(output[0], torch.Tensor):
-                                 # Take the first tensor if output is sequence (common case)
-                                 tensor_to_capture = output[0]
-                                 if len(output) > 1:
-                                     warnings.warn(f"Layer '{layer_name}' output is a sequence with >1 tensor. Capturing only the first.", RuntimeWarning)
-                             # else: Optional warning if output structure is unexpected
-
+                        elif self.capture_mode == 'output':  # capture_mode == 'output'
+                            if isinstance(output, torch.Tensor):
+                                tensor_to_capture = output
+                            elif isinstance(output, (tuple, list)) and output and isinstance(output[0], torch.Tensor):
+                                tensor_to_capture = output[0]  # Default to first tensor if output is a sequence
+                                # Optional: Warn if layer output is a multi-tensor sequence
+                                # if len(output) > 1:
+                                #     warnings.warn(f"Layer '{layer_name}' output is a sequence. Capturing only the first tensor.", RuntimeWarning, stacklevel=2)
                         if tensor_to_capture is not None:
-                            # Use the suffix determined in __init__
                             batch_storage[f"{layer_name}{self.data_suffix}"].append(tensor_to_capture.detach().cpu())
 
                     return forward_hook
 
-                for name, module in self.target_modules.items():
-                    handle = module.register_forward_hook(create_forward_hook(name))
+                for name, module_to_hook in self.target_modules.items():
+                    handle = module_to_hook.register_forward_hook(create_forward_hook(name))
                     self._hook_handles.append(handle)
 
-            # --- 4. Forward Pass & Output Capture ---
-            # ... (same as before) ...
-            model_outputs_batch = None
+            # --- 3. Forward Pass & Hook Removal ---
+            model_outputs_batch: Optional[torch.Tensor] = None
             try:
-                with torch.no_grad(): model_outputs_batch = self.model(images)
+                with torch.no_grad():  # Ensure no gradients are computed during inference
+                    model_outputs_batch = self.model(images)
             except Exception as e:
-                warnings.warn(f"Forward pass failed batch {batch_num}: {e}. Skipping batch.", RuntimeWarning)
-                self._clear_hooks(); del images, labels_batch, image_ids_batch, batch_storage, model_outputs_batch
-                torch.cuda.empty_cache() if self.device.type == 'cuda' else None; continue
+                warnings.warn(f"Forward pass failed for batch {batch_idx}: {e}. Skipping batch.", RuntimeWarning,
+                              stacklevel=2)
+                # self._clear_hooks() already in finally
+                continue  # Skip to next batch
+            finally:
+                self._clear_hooks()  # CRITICAL: Always remove hooks after forward pass
 
-            # --- 5. Hook Removal ---
-            self._clear_hooks()
-
-            # --- 6. Data Consolidation (Layer Inputs/Outputs) ---
+            # --- 4. Consolidate Hooked Data ---
+            # consolidated_batch_data maps a base column name to the batch tensor for that layer
             consolidated_batch_data: Dict[str, torch.Tensor] = {}
             if hooks_needed:
-                 for key, tensor_list in batch_storage.items():
-                    if tensor_list:
-                        # Extract base name using the current suffix
-                        layer_base_name = key.replace(self.data_suffix, '')
-                        if len(tensor_list) > 1:
-                            warnings.warn(f"Layer '{layer_base_name}' ({self.capture_mode}) hook fired {len(tensor_list)} times in batch {batch_num}. Using first capture.", RuntimeWarning)
+                for key, tensor_list in batch_storage.items():  # key is e.g. "layerName_layer_output"
+                    if tensor_list:  # Should contain one tensor if layer called once, or multiple if called multiple times
+                        # If a layer is called multiple times in one forward pass (e.g. shared weights in a loop),
+                        # its hook fires multiple times. We take the first one by default.
+                        # layer_base_name_for_warning = key.replace(self.data_suffix, '')
+                        # if len(tensor_list) > 1:
+                        #     warnings.warn(f"Layer '{layer_base_name_for_warning}' ({self.capture_mode}) hook fired {len(tensor_list)} times for batch {batch_idx}. Using first capture.", RuntimeWarning, stacklevel=2)
                         consolidated_batch_data[key] = tensor_list[0]
 
-            # --- 6b. Store Model Outputs ---
-            # ... (same as before) ...
+            # --- 5. Store Model Outputs ---
             if model_outputs_batch is not None:
-                try: self.model_outputs_list.extend(model_outputs_batch.detach().cpu().tolist())
-                except Exception as e:
-                    warnings.warn(f"Could not store model outputs batch {batch_num}: {e}.", RuntimeWarning)
-                    self.model_outputs_list.extend([None] * batch_size)
+                try:
+                    self.model_outputs_list.extend(model_outputs_batch.detach().cpu().tolist())
+                except Exception:  # Catch broad error if .tolist() or other ops fail
+                    self.model_outputs_list.extend([None] * batch_size)  # Append Nones if conversion fails
 
+            # --- 6. Prepare Data for DataFrame (Per-Sample Processing) ---
+            # Convert labels and IDs to Python lists if they aren't already
+            labels_list: Optional[List[Any]] = None
+            if include_label and labels_batch is not None:
+                labels_list = labels_batch.tolist() if isinstance(labels_batch, torch.Tensor) else list(labels_batch)
 
-            # --- 7. Sample Data Extraction & Appending ---
-            # ... (label/id processing is the same) ...
-            labels_list = None # Simplified label/id prep
-            if include_label and labels_batch is not None: labels_list = labels_batch.tolist() if isinstance(labels_batch, torch.Tensor) else list(labels_batch)
-            image_ids_list = None
-            if include_image_id and image_ids_batch is not None: image_ids_list = image_ids_batch.tolist() if isinstance(image_ids_batch, torch.Tensor) else list(image_ids_batch)
+            image_ids_list: Optional[List[Any]] = None
+            if include_image_id and image_ids_batch is not None:
+                image_ids_list = image_ids_batch.tolist() if isinstance(image_ids_batch, torch.Tensor) else list(
+                    image_ids_batch)
 
-            for i in range(batch_size):
-                sample_data: Dict[str, Any] = {}
-                if include_label: sample_data["label"] = labels_list[i] if labels_list and i < len(labels_list) else None
-                if include_image_id: sample_data[final_id_col_name] = image_ids_list[i] if image_ids_list and i < len(image_ids_list) else None
+            # Pre-calculate final column names for layer data for this batch (avoids re-computation per sample)
+            current_batch_layer_col_names: Dict[
+                str, Dict[str, str]] = {}  # Maps internal key to {'data': data_col_name, 'error': error_col_name}
+            if hooks_needed:
+                for internal_key, batch_tensor_for_naming in consolidated_batch_data.items():
+                    base_name_for_col = internal_key  # e.g., "layer1_layer_output"
+                    layer_name_part = internal_key.replace(self.data_suffix, "")  # e.g., "layer1"
+                    error_col_name = f"{layer_name_part}_error"
+
+                    # Determine the actual data column name based on tensor dimension and GAP flag
+                    if batch_tensor_for_naming.ndim >= 3 and apply_gap_to_high_dim:
+                        data_col_name = f"{base_name_for_col}_avg"  # e.g. "layer1_layer_output_avg"
+                    else:
+                        data_col_name = base_name_for_col  # e.g. "layer1_layer_output"
+                    current_batch_layer_col_names[internal_key] = {'data': data_col_name, 'error': error_col_name}
+
+            for i in range(batch_size):  # Iterate over samples in the batch
+                sample_data: Dict[str, Any] = {}  # Data for this single sample
+                if include_label:
+                    sample_data["label"] = labels_list[i] if labels_list and i < len(labels_list) else None
+                if include_image_id:
+                    sample_data[final_id_col_name] = image_ids_list[i] if image_ids_list and i < len(
+                        image_ids_list) else None
 
                 if hooks_needed:
-                    for key, batch_tensor in consolidated_batch_data.items():
-                        # Use the suffix determined in __init__
-                        layer_name = key.replace(self.data_suffix, "")
-                        col_name_base = f"{layer_name}{self.data_suffix}" # Base name for columns
-
+                    for internal_key, batch_tensor in consolidated_batch_data.items():
+                        col_names_for_layer = current_batch_layer_col_names[internal_key]
+                        data_col_to_populate = col_names_for_layer['data']
+                        error_col_to_populate = col_names_for_layer['error']
                         try:
-                            if i < batch_tensor.shape[0]:
-                                sample_item = batch_tensor[i]
-                                # Processing logic (GAP vs Flatten) remains the same based on tensor dim
-                                if sample_item.ndim >= 3:
-                                    if apply_gap_to_high_dim:
-                                        spatial_dims = tuple(range(1, sample_item.ndim))
-                                        col_name_gap = f"{col_name_base}_avg"
-                                        sample_data[col_name_gap] = sample_item.mean(dim=spatial_dims).tolist()
-                                    else:
-                                        sample_data[col_name_base] = sample_item.flatten().tolist()
-                                elif sample_item.ndim <= 2 and sample_item.ndim > 0 : # Covers 2D, 1D
-                                     sample_data[col_name_base] = sample_item.flatten().tolist() # Flatten 2D, keep 1D as list
-                                elif sample_item.ndim == 0:
-                                    sample_data[col_name_base] = sample_item.item()
-                                else: # Should not happen
-                                     sample_data[f"{layer_name}_error"] = f"Unexpected shape {sample_item.shape}"
+                            sample_item = batch_tensor[i]  # Tensor for the i-th sample from this layer's batch output
 
-                            else: # Index out of bounds
-                                col_to_store_none = f"{col_name_base}_avg" if apply_gap_to_high_dim and batch_tensor.ndim >=3 else col_name_base
-                                sample_data[col_to_store_none] = None
+                            if sample_item.ndim >= 3:  # High-dimensional (e.g., image feature map C,H,W)
+                                if apply_gap_to_high_dim:
+                                    spatial_dims = tuple(range(1, sample_item.ndim))  # Dims other than channel
+                                    sample_data[data_col_to_populate] = sample_item.mean(dim=spatial_dims).tolist()
+                                else:  # Flatten high-dim tensor
+                                    sample_data[data_col_to_populate] = sample_item.flatten().tolist()
+                            elif 0 < sample_item.ndim <= 2:  # 1D or 2D tensor (e.g. features, or already GAPped)
+                                sample_data[data_col_to_populate] = sample_item.flatten().tolist()
+                            elif sample_item.ndim == 0:  # Scalar tensor
+                                sample_data[data_col_to_populate] = sample_item.item()
                         except Exception as e:
-                            sample_data[f"{layer_name}_error"] = str(e)
-
+                            sample_data[error_col_to_populate] = str(e)
+                            # Ensure the data column is not populated or is None if an error occurred
+                            if data_col_to_populate in sample_data: del sample_data[data_col_to_populate]
                 self.extracted_data_list.append(sample_data)
-            # --- End Sample Extraction ---
 
-            # --- 8. Batch Cleanup ---
-            # ... (same as before) ...
-            del consolidated_batch_data, batch_storage, images, labels_batch, image_ids_batch, model_outputs_batch
-            torch.cuda.empty_cache() if self.device.type == 'cuda' else None
+            # Batch Cleanup: Python's GC handles most objects. `torch.cuda.empty_cache()` is slow.
+            # If facing extreme memory pressure, it could be enabled here, but it has a performance cost.
+            # torch.cuda.empty_cache() if self.device.type == 'cuda' else None
 
-        # --- 9. Final Output Creation & Exploding ---
-        if not self.extracted_data_list and not self.model_outputs_list:
-             warnings.warn("No layer data extracted AND no model outputs collected. Returning empty.", UserWarning)
-             return polars.DataFrame(), []
+        # --- 7. Final DataFrame Creation & Post-processing ---
+        if not self.extracted_data_list and not self.model_outputs_list:  # No data collected at all
+            warnings.warn("No layer data extracted AND no model outputs collected. Returning empty.", UserWarning,
+                          stacklevel=2)
+            return polars.DataFrame(), []
 
-        print(f"Converting {len(self.extracted_data_list)} sample records to Polars DataFrame...")
-        results_df = None
+        results_df: Optional[polars.DataFrame] = None
         try:
             results_df = polars.DataFrame(self.extracted_data_list, strict=False)
 
-            # <<< MODIFIED: Use dynamic suffix >>>
-            potential_list_cols = [
+            potential_list_col_suffixes = [self.data_suffix, f"{self.data_suffix}_avg"]
+            cols_to_check_for_list_type = [
                 c for c in results_df.columns
-                if c.endswith(self.data_suffix) or c.endswith(f"{self.data_suffix}_avg")
+                if any(c.endswith(suffix) for suffix in potential_list_col_suffixes)
             ]
             list_cols_to_explode = [
-                c for c in potential_list_cols if results_df.columns and c in results_df.columns and results_df[c].dtype == polars.List
-            ] # Added check c in results_df.columns
-            # ... (rest of exploding logic is the same, using the identified list_cols_to_explode) ...
-            non_list_activation_cols = set(potential_list_cols) - set(list_cols_to_explode)
-            if non_list_activation_cols: print(f"Note: Columns {non_list_activation_cols} match naming but are not List type (likely scalar).")
+                c for c in cols_to_check_for_list_type
+                if results_df[c].dtype == polars.List(polars.Unknown) or isinstance(results_df[c].dtype, polars.List)
+            ]
 
             if list_cols_to_explode:
-                print(f"Exploding list columns: {list_cols_to_explode}")
-                all_new_col_exprs = []
-                max_lengths = {}
-                for col_name in list_cols_to_explode:
-                    try: # Simplified max_len calculation from previous step
-                        if col_name in results_df.columns:
-                            max_len = results_df.select(polars.col(col_name).list.len().max()).item()
-                            max_lengths[col_name] = max_len if max_len is not None else 0
-                        else: max_lengths[col_name] = 0
-                    except Exception as e: warnings.warn(f"Max length error for '{col_name}': {e}. Skipping.", UserWarning); max_lengths[col_name] = 0
+                max_len_exprs = [
+                    polars.col(c).list.len().max().fill_null(0).alias(c) for c in list_cols_to_explode
+                ]
+                # .row(0, named=True) gets the single row of max lengths as a dict
+                max_lengths_dict = results_df.select(max_len_exprs).row(0, named=True) if max_len_exprs else {}
 
+                all_new_col_exprs = []
                 for col_name in list_cols_to_explode:
-                     if col_name in results_df.columns:
-                        max_len = max_lengths.get(col_name, 0)
-                        if max_len > 0:
-                            for i in range(max_len):
-                                new_col_name = f"{col_name}_{i}"
-                                expr = polars.col(col_name).list.get(i).alias(new_col_name)
-                                all_new_col_exprs.append(expr)
+                    max_len = max_lengths_dict.get(col_name, 0)
+                    if max_len > 0:  # Only create expressions if there's something to get
+                        for i in range(max_len):
+                            new_col_name = f"{col_name}_{i}"  # Exploded column name
+                            expr = polars.col(col_name).list.get(i).alias(new_col_name)
+                            all_new_col_exprs.append(expr)
 
                 if all_new_col_exprs:
-                    existing_cols = [c for c in results_df.columns if c not in list_cols_to_explode]
-                    results_df = results_df.select(existing_cols + all_new_col_exprs)
-                    print(f"DataFrame shape after exploding: {results_df.shape}")
-                else: print("No list columns with elements found to explode.") # This might appear if max_len was always 0
-            else: print("No columns identified as List type for explosion.")
+                    existing_cols_to_keep = [c for c in results_df.columns if c not in list_cols_to_explode]
+                    results_df = results_df.select(existing_cols_to_keep + all_new_col_exprs)
 
-            # Reorder columns
-            final_cols = results_df.columns
-            ordered_cols = []
-            if final_id_col_name in final_cols: ordered_cols.append(final_id_col_name)
-            if "label" in final_cols: ordered_cols.append("label")
-            ordered_cols.extend(sorted([c for c in final_cols if c not in ordered_cols]))
-            results_df = results_df.select(ordered_cols)
+            # Reorder columns: ID, label, then sorted remaining columns
+            if results_df is not None:
+                current_df_cols = results_df.columns
+                ordered_cols = []
+                # Add ID and label first if they exist
+                if final_id_col_name in current_df_cols: ordered_cols.append(final_id_col_name)
+                if "label" in current_df_cols: ordered_cols.append("label")
 
-            return results_df, self.model_outputs_list
+                remaining_cols = sorted([c for c in current_df_cols if c not in ordered_cols])
+                ordered_cols.extend(remaining_cols)
+                results_df = results_df.select(ordered_cols)
 
-        except Exception as e:
+            # Ensure a DataFrame is returned, even if it's empty
+            return results_df if results_df is not None else polars.DataFrame(), self.model_outputs_list
+
+        except Exception as e:  # Fallback if DataFrame processing fails
             error_msg = f"Polars DataFrame processing failed: {e}\n{traceback.format_exc()}"
-            warnings.warn(f"{error_msg}\nReturning raw list of dictionaries for layer data.", UserWarning)
+            warnings.warn(f"{error_msg}\nReturning raw list of dictionaries for layer data.", UserWarning, stacklevel=2)
             return self.extracted_data_list, self.model_outputs_list

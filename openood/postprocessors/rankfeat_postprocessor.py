@@ -14,7 +14,7 @@ class RankFeatPostprocessor(BasePostprocessor):
 
     @torch.no_grad()
     def postprocess(self, net: nn.Module, data: Any):
-        inputs = data.cuda()
+        inputs = data#.cuda()
 
         # Logit of Block 4 feature
         feat1 = net.intermediate_forward(inputs, layer_index=4)

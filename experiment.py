@@ -14,39 +14,39 @@ if __name__ == "__main__":
 
     methods = [
         #"ash",
-        #"ebo",
+        "ebo",
         #"knn",
-        "lipro"
-        #"odin",
-        #"react"
-        #"she",
+        #"lipro"
+        "odin",
+        "react",
+        "she",
         #"temp_scaling",
-        #"gen",
-        #"gram",
-        #"rmds",
-        #"mds_ensemble",
+        "gen",
+        "gram",
+        "rmds",
+        "mds_ensemble",
         #"cutpaste",
         #"draem",
         #"dropout",
         #"fdbd",
         #"godin",
-        #"gradnorm"
+        "gradnorm",
         #"iodin",
         #"kdad",
-        #"mls"
+        "mls",
         #"mcd",
         #"vim"
         #"klm"
-        #"mds"
+        "mds",
         #"dice"
-        #"rankfeat"
+        "rankfeat"
         #"msp"
         # opengan"
     ]
 
-    setup = "cifar10"
-    chkpt = "cifar10_resnet18_32x32_base_e100_lr0.1_default"
-    num_c = 10
+    setup = "cifar100"
+    chkpt = "cifar100_resnet18_32x32_base_e100_lr0.1_default"
+    num_c = 100
 
     for method in methods:
 

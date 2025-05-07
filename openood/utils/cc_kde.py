@@ -6,6 +6,7 @@ from tqdm import tqdm
 from scipy.special import softmax
 from sklearn.neighbors import KernelDensity
 from typing import Literal, List, Dict, Optional, Any
+import warnings
 
 
 class DimensionWiseKdeOOD:
@@ -13,13 +14,6 @@ class DimensionWiseKdeOOD:
     Performs Out-of-Distribution (OOD) detection based on comparing instance
     likelihoods across dimension-wise Kernel Density Estimates (KDEs) fitted
     for known normal classes.
-
-    Attributes:
-        kdes_ (dict): Stores the fitted sklearn KernelDensity objects.
-                     Structure: {column_name: {class_label: kde_object | None}}
-        fitted_columns_ (list): List of column names used for fitting.
-        normal_labels_ (list): List of unique class labels seen during fitting.
-        bandwidth_method_ (str): Bandwidth selection method used.
     """
 
     def __init__(self):
@@ -28,9 +22,7 @@ class DimensionWiseKdeOOD:
         self.fitted_columns_: Optional[List[str]] = None
         self.normal_labels_: Optional[List[Any]] = None
         self.bandwidth_method_: Optional[str] = None
-        # Define a large negative value to represent log(0) for missing KDEs
-        self._log_zero_penalty: float = -1e30
-        # Add attributes for Mahalanobis if needed later (set during fit/transform on ID data)
+        self._log_zero_penalty: float = -1e30  # Large negative value for log(0)
         self.likelihood_mean_vector_: Optional[np.ndarray] = None
         self.likelihood_inv_covariance_: Optional[np.ndarray] = None
 
@@ -38,66 +30,48 @@ class DimensionWiseKdeOOD:
     def _calculate_bandwidth(data: np.ndarray, method: str) -> float:
         """
         Calculates bandwidth for KDE using Silverman's or Scott's rule.
-
-        Args:
-            data: 1D NumPy array of data points for a single class/column.
-            method: 'silverman' or 'scott'.
-
-        Returns:
-            The calculated bandwidth (float). Returns a small default value
-            if calculation is not possible (e.g., std dev is zero).
         """
         n = len(data)
+
+        if n == 0:  # Should ideally not be called with n=0 if min_samples_for_kde > 0
+            return 0.01
+
         std_dev = np.std(data)
 
-        # Handle cases with insufficient data or zero standard deviation
-        if n <= 1 or std_dev == 0:
-            # print(f"Warning: Using small default bandwidth for data with n={n}, std={std_dev:.2e}")
-            return 0.01  # Heuristic small default bandwidth
+        if n == 1:  # KDE on 1 point is ill-defined; std_dev is 0.0.
+            return 0.01  # Small, non-zero bandwidth
 
-        # Calculate bandwidth factor based on n^(-1/5) for KDE
-        n_factor = n ** (-0.2)  # n^(-1/5)
+        if std_dev == 0:  # Multiple identical points
+            # KDE is problematic. A very small bandwidth makes it a sharp spike.
+            return 1e-6
 
+            # For 1D data, exponent in n_factor is 1/(d+4) = 1/5 = 0.2
+        n_factor = n ** (-0.2)
         if method == "silverman":
-            factor = 0.9 * std_dev * n_factor  # noqa
+            factor = 0.9 * std_dev * n_factor
         elif method == "scott":
-            factor = 1.06 * std_dev * n_factor  # noqa
+            factor = 1.06 * std_dev * n_factor
         else:
-            print(
-                f"Warning: Unknown bandwidth method '{method}', defaulting to 'silverman'."
-            )
-            factor = 0.9 * std_dev * n_factor  # noqa
+            # This case should ideally be caught by Literal type hint or earlier validation
+            warnings.warn(f"Unknown bandwidth method '{method}', defaulting to 'silverman'.", UserWarning)
+            factor = 0.9 * std_dev * n_factor
 
-        return max(factor, 1e-6)
+        return max(factor, 1e-6)  # Ensure bandwidth is positive and non-zero
 
     def fit(
-        self,
-        data: pl.DataFrame,
-        like: str | list[str],
-        label_col: str,
-        bandwidth_method: Literal["silverman", "scott"] = "silverman",
-        kernel: str = "gaussian",
-        min_samples_for_kde: int = 5,
-        calculate_mahalanobis_params: bool = False,  # New flag
+            self,
+            data: pl.DataFrame,
+            like: str | list[str],  # Python 3.10+ for | union type
+            label_col: str,
+            bandwidth_method: Literal["silverman", "scott"] = "silverman",
+            kernel: str = "gaussian",
+            min_samples_for_kde: int = 5,
+            calculate_mahalanobis_params: bool = False,
     ):
         """
         Fits 1D KDEs for each class in each specified column. Optionally
         calculates parameters for Mahalanobis distance in likelihood space.
-
-        Args:
-            data: Training Polars DataFrame with normal class data and labels.
-            like: Polars selector pattern (e.g., "^feature_.*$", "col_*")
-                  to select feature columns.
-            label_col: Name of the column containing class labels.
-            bandwidth_method: Method to estimate KDE bandwidth ('silverman' or 'scott').
-            kernel: Kernel function for KDE (passed to sklearn.neighbors.KernelDensity).
-            min_samples_for_kde: Minimum number of non-null samples required
-                                 per class/column to attempt fitting a KDE.
-            calculate_mahalanobis_params: If True, calculate and store the mean
-                                         vector and inverse covariance of the
-                                         log-likelihood vectors from the training data.
         """
-        # --- [Existing fit code from previous steps remains unchanged] ---
         if not isinstance(data, pl.DataFrame):
             raise TypeError("Input data must be a Polars DataFrame.")
         if label_col not in data.columns:
@@ -106,329 +80,295 @@ class DimensionWiseKdeOOD:
         self.bandwidth_method_ = bandwidth_method
 
         try:
-            potential_cols = data.select(cs.contains(like).exclude(label_col)).columns
-            self.fitted_columns_ = [
-                col for col in potential_cols if data[col].dtype.is_numeric()
-            ]
-            if len(potential_cols) > len(self.fitted_columns_):
-                non_numeric = set(potential_cols) - set(self.fitted_columns_)
-                print(
-                    f"Warning: Non-numeric columns matched pattern and were excluded: {non_numeric}"
-                )
+            potential_cols_selector = cs.contains(like)
+            if label_col in data.select(potential_cols_selector).columns:  # Avoid excluding if not matched
+                potential_cols_selector = potential_cols_selector.exclude(label_col)
 
+            potential_cols_df = data.select(potential_cols_selector)
+            self.fitted_columns_ = potential_cols_df.select(cs.numeric()).columns
+
+            non_numeric_excluded = set(potential_cols_df.columns) - set(self.fitted_columns_)
+            if non_numeric_excluded:
+                warnings.warn(
+                    f"Non-numeric columns matching pattern '{like}' were excluded: {list(non_numeric_excluded)}",
+                    UserWarning
+                )
+        except pl.exceptions.ColumnNotFoundError:  # `cs.contains(like)` found no columns
+            self.fitted_columns_ = []
         except Exception as e:
-            raise ValueError(
-                f"Could not select numeric columns using pattern '{like}'. Original error: {e}"
-            )
+            raise ValueError(f"Error selecting feature columns using pattern '{like}'. Original error: {e}")
 
         if not self.fitted_columns_:
             raise ValueError(
-                f"No numeric feature columns found matching pattern '{like}'."
+                f"No numeric feature columns found matching pattern '{like}' (excluding label column '{label_col}')."
             )
 
         self.normal_labels_ = data[label_col].unique(maintain_order=True).to_list()
         if not self.normal_labels_:
             raise ValueError(f"No labels found in label column '{label_col}'.")
 
-        self.kdes_ = {col: {} for col in self.fitted_columns_}
-        print(
-            f"Fitting KDEs for {len(self.normal_labels_)} classes and {len(self.fitted_columns_)} columns..."
-        )
+        self.kdes_ = {
+            col: {label: None for label in self.normal_labels_}
+            for col in self.fitted_columns_
+        }
 
-        for col in tqdm(self.fitted_columns_, desc="Fitting KDEs"):
+        for col in tqdm(self.fitted_columns_, desc="Fitting KDEs (by feature)", unit="feature", leave=False):
+            try:
+                # Select feature and label columns, aliasing to avoid name conflicts if 'col' is same as 'label_col'
+                # (though 'label_col' should be excluded from 'fitted_columns_')
+                # Filter out rows where the current feature column is null.
+                feature_and_labels_df = data.select(
+                    pl.col(col).alias("feature_value"),
+                    pl.col(label_col).alias("label_value")  # Use a distinct alias for clarity
+                ).filter(pl.col("feature_value").is_not_null())
+
+                if feature_and_labels_df.is_empty():
+                    continue
+            except pl.exceptions.PolarsError as e:
+                warnings.warn(f"Error preparing data for column '{col}': {e}. Skipping this column.", UserWarning)
+                continue
+
             for label in self.normal_labels_:
-                class_col_data = (
-                    data.filter(pl.col(label_col) == label)
-                    .select(pl.col(col).drop_nulls())
-                    .to_series()
-                    .to_numpy()
-                )
+                class_feature_data_series = feature_and_labels_df.filter(
+                    pl.col("label_value") == label
+                ).select("feature_value").to_series()
 
-                if len(class_col_data) < min_samples_for_kde:
-                    self.kdes_[col][label] = None
+                if len(class_feature_data_series) < min_samples_for_kde:
                     continue
 
-                data_reshaped = class_col_data.reshape(-1, 1)
+                class_col_data_np = class_feature_data_series.to_numpy()
+                data_reshaped = class_col_data_np.reshape(-1, 1)
 
                 try:
-                    bw = self._calculate_bandwidth(
-                        class_col_data, self.bandwidth_method_
-                    )
+                    bw = self._calculate_bandwidth(class_col_data_np, self.bandwidth_method_)
+                    if bw < 1e-7:  # Effective zero bandwidth after calculation
+                        warnings.warn(
+                            f"Calculated bandwidth for col='{col}', label='{label}' is too small ({bw:.2e}). Skipping KDE.",
+                            UserWarning)
+                        continue
+
                     kde = KernelDensity(kernel=kernel, bandwidth=bw)
                     kde.fit(data_reshaped)
                     self.kdes_[col][label] = kde
-                except Exception as e:
-                    print(
-                        f"Error fitting KDE for col='{col}', label='{label}'. Error: {e}. Storing None."
-                    )
-                    self.kdes_[col][label] = None
+                except Exception as e:  # Catch any error during KDE fitting for a specific slice
+                    warnings.warn(f"Error fitting KDE for col='{col}', label='{label}'. Error: {e}. Storing None.",
+                                  UserWarning)
+                    # self.kdes_[col][label] remains None
 
-        fitted_kde_count = sum(
-            kde is not None
-            for col_kdes in self.kdes_.values()
-            for kde in col_kdes.values()
-        )
-        print(f"Fitting complete. Successfully fitted {fitted_kde_count} KDE models.")
+        fitted_kde_count = sum(kde is not None for col_kdes in self.kdes_.values() for kde in col_kdes.values())
         if fitted_kde_count == 0:
-            print(
-                "Warning: No KDEs were successfully fitted. Check data and parameters."
-            )
-        # --- [End of existing fit code] ---
+            warnings.warn(
+                "No KDEs were successfully fitted. Check data (e.g., constant features, too few samples per class) and parameters.",
+                UserWarning)
 
-        # --- Optional: Calculate Mahalanobis Parameters ---
         self.likelihood_mean_vector_ = None
         self.likelihood_inv_covariance_ = None
         if calculate_mahalanobis_params:
-            print("Calculating Mahalanobis parameters on training likelihoods...")
             if fitted_kde_count == 0:
-                print(
-                    "Warning: Cannot calculate Mahalanobis params as no KDEs were fitted."
-                )
+                warnings.warn("Cannot calculate Mahalanobis params as no KDEs were fitted.", UserWarning)
                 return self
 
-            # Get likelihoods for the training data itself
-            train_likelihood_df = self.transform(
-                data, calculate_mahalanobis_score=False
-            )  # Avoid recursion
-            likelihood_cols = [
-                f"total_loglik_class_{lbl}" for lbl in self.normal_labels_
-            ]
-            train_likelihood_vectors = train_likelihood_df.select(
-                likelihood_cols
-            ).to_numpy()
+            # Use original data to calculate likelihoods for Mahalanobis params
+            train_likelihood_df = self.transform(data, calculate_mahalanobis_score=False)
 
-            # Handle potential NaNs/Infs in training likelihoods before calculating cov/mean
+            likelihood_cols_for_maha = [f"total_loglik_class_{lbl}" for lbl in self.normal_labels_]
+
+            # Check if all expected likelihood columns are present
+            actual_cols = train_likelihood_df.columns
+            missing_maha_cols = [lc for lc in likelihood_cols_for_maha if lc not in actual_cols]
+            if missing_maha_cols:
+                warnings.warn(
+                    f"Missing likelihood columns for Mahalanobis: {missing_maha_cols}. Cannot calculate params.",
+                    UserWarning)
+                return self
+
+            train_likelihood_vectors = train_likelihood_df.select(likelihood_cols_for_maha).to_numpy()
             train_likelihood_vectors = np.nan_to_num(
-                train_likelihood_vectors,
-                nan=self._log_zero_penalty,  # Or another strategy?
-                posinf=0,
-                neginf=self._log_zero_penalty,
+                train_likelihood_vectors, nan=self._log_zero_penalty,
+                posinf=self._log_zero_penalty, neginf=self._log_zero_penalty
             )
 
-            if (
-                train_likelihood_vectors.shape[0] < 2  # noqa
-                or train_likelihood_vectors.shape[1] < 1  # noqa
-            ):
-                print(
-                    "Warning: Insufficient data or classes to calculate Mahalanobis parameters reliably."
-                )
+            if train_likelihood_vectors.shape[0] < 2 or train_likelihood_vectors.shape[1] == 0:
+                warnings.warn(
+                    "Insufficient data (rows or classes after likelihood calculation) "
+                    "to calculate Mahalanobis parameters reliably.", UserWarning)
                 return self
 
             try:
                 self.likelihood_mean_vector_ = np.mean(train_likelihood_vectors, axis=0)
-                # Use pseudo-inverse for robustness if covariance is singular/ill-conditioned
+                # Ensure rowvar=False for (samples, features) layout
                 covariance = np.cov(train_likelihood_vectors, rowvar=False)
-                self.likelihood_inv_covariance_ = np.linalg.pinv(covariance)
-                print("Mahalanobis parameters calculated.")
+
+                # Handle scalar covariance for single feature (single class likelihood vector)
+                if covariance.ndim == 0:
+                    covariance = np.array([[covariance]])
+
+                    # Add ridge regularization for stability
+                ridge_epsilon = 1e-6
+                covariance_reg = covariance + np.eye(covariance.shape[0]) * ridge_epsilon
+                self.likelihood_inv_covariance_ = np.linalg.pinv(covariance_reg)
             except Exception as e:
-                print(
-                    f"Error calculating Mahalanobis parameters: {e}. Parameters not stored."
-                )
+                warnings.warn(f"Error calculating Mahalanobis parameters: {e}. Parameters not stored.", UserWarning)
                 self.likelihood_mean_vector_ = None
                 self.likelihood_inv_covariance_ = None
-
         return self
 
     def transform(
-        self, inference_data: pl.DataFrame, calculate_mahalanobis_score: bool = True
+            self, inference_data: pl.DataFrame, calculate_mahalanobis_score: bool = True
     ) -> pl.DataFrame:
-        """
-        Scores instances in the inference data based on likelihood against fitted KDEs.
+        if not all(hasattr(self, attr) and getattr(self, attr) is not None for attr in
+                   ['kdes_', 'fitted_columns_', 'normal_labels_']):
+            raise RuntimeError("The '.fit()' method must be called before '.transform()'.")
 
-        Args:
-            inference_data: Polars DataFrame with instances to score (labels not needed).
-                            Must contain columns matching those used in `fit`.
-            calculate_mahalanobis_score: If True and parameters were calculated during fit,
-                                         compute the Mahalanobis distance score.
-
-        Returns:
-            A Polars DataFrame with OOD scores for each input instance:
-            - total_loglik_class_{label}: Summed log-likelihood across columns for each normal class.
-            - max_log_likelihood: Maximum log-likelihood across all normal classes.
-            - mean_log_likelihood: Mean log-likelihood across all normal classes.
-            - median_log_likelihood: Median log-likelihood across all normal classes.
-            - ood_score_neg_loglik: Negative of max_log_likelihood (higher = more OOD).
-            - ood_score_neg_mean_loglik: Negative of mean_log_likelihood (higher = more OOD).
-            - ood_score_neg_median_loglik: Negative of median_log_likelihood (higher = more OOD).
-            - ood_score_likelihood_difference: Negative of (max_log_likelihood - mean_log_likelihood) (higher ~ more OOD).
-            - ood_score_median_difference: Negative of (max_log_likelihood - median_log_likelihood) (higher ~ more OOD).
-            - ood_score_std_max_mean_diff: (max_log_likelihood - mean_log_likelihood) /std_dev(log_likelihoods) (higher ~ more specific fit).
-            - max_softmax_prob: Maximum probability from softmax applied to class log-likelihoods (lower = more OOD).
-            - ood_score_msp: 1.0 - max_softmax_prob (higher = more OOD).
-            - ood_score_mahalanobis: Mahalanobis distance in likelihood space (if calculated, higher = more OOD).
-        """
-        if (
-            self.kdes_ is None
-            or self.fitted_columns_ is None
-            or self.normal_labels_ is None
-        ):
-            raise RuntimeError(
-                "The '.fit()' method must be called before '.transform()'."
-            )
         if not isinstance(inference_data, pl.DataFrame):
             raise TypeError("Input inference_data must be a Polars DataFrame.")
 
-        missing_cols = [
-            col for col in self.fitted_columns_ if col not in inference_data.columns
-        ]
+        missing_cols = [col for col in self.fitted_columns_ if col not in inference_data.columns]
         if missing_cols:
-            raise ValueError(
-                f"Inference data is missing required columns: {missing_cols}"
-            )
+            raise ValueError(f"Inference data is missing required (fitted) columns: {missing_cols}")
 
         n_instances = len(inference_data)
         n_classes = len(self.normal_labels_)
-        label_to_index = {label: i for i, label in enumerate(self.normal_labels_)}
+
+        # Define expected output columns for schema consistency, even if empty
+        likelihood_col_names = [f"total_loglik_class_{lbl}" for lbl in self.normal_labels_]
+        metric_col_names = [
+            "max_log_likelihood", "mean_log_likelihood",
+            "ood_score_likelihood_difference", "ood_score_gap",
+            "ood_score_entropy", "ood_score_mahalanobis"
+        ]
+        all_output_cols = likelihood_col_names + metric_col_names
+
+        if n_instances == 0:
+            schema = {col_name: pl.Float64 for col_name in all_output_cols}
+            return pl.DataFrame(schema=schema)
+
+        # Pre-extract relevant feature data to NumPy array
+        if not self.fitted_columns_:  # No features were fitted
+            inference_features_np = np.empty((n_instances, 0), dtype=np.float64)
+        else:
+            select_exprs = [pl.col(col).cast(pl.Float64, strict=False) for col in self.fitted_columns_]
+            inference_features_np = inference_data.select(select_exprs).to_numpy()
 
         total_log_likelihoods = np.full((n_instances, n_classes), 0.0, dtype=np.float64)
 
-        # --- [Existing likelihood calculation loop remains unchanged] ---
-        for col in tqdm(self.fitted_columns_, desc="Scoring Instances", leave=False):
-            try:
-                inference_col_data_np = (
-                    inference_data.select(pl.col(col).cast(pl.Float64, strict=False))
-                    .to_series()
-                    .to_numpy()
-                )
-                inference_col_data_np_reshaped = inference_col_data_np.reshape(-1, 1)
-            except Exception as e:
-                print(
-                    f"Error processing inference data for column '{col}': {e}. Skipping column."
-                )
-                total_log_likelihoods += self._log_zero_penalty
-                continue
+        if not self.fitted_columns_ or n_classes == 0:  # No features or no classes to score against
+            # Apply penalty if there are classes but no features to score them on
+            if n_classes > 0:  # if n_classes is 0, total_log_likelihoods is (N,0) which is fine
+                total_log_likelihoods[:] = self._log_zero_penalty * (
+                    len(self.fitted_columns_) if self.fitted_columns_ else 1)
+        else:
+            for col_idx, col_name in enumerate(
+                    tqdm(self.fitted_columns_, desc="Scoring Instances", unit="feature", leave=False,
+                         dynamic_ncols=True)):
 
-            for label in self.normal_labels_:
-                kde = self.kdes_[col].get(label)
-                class_index = label_to_index[label]
+                current_feature_values = inference_features_np[:, col_idx]
+                current_feature_values_reshaped = current_feature_values.reshape(-1, 1)
+                mask_finite_input = np.isfinite(current_feature_values)
 
-                if kde is not None:
-                    try:
-                        mask_finite = np.isfinite(
-                            inference_col_data_np_reshaped
-                        ).flatten()
-                        log_likes = kde.score_samples(inference_col_data_np_reshaped)
-                        log_likes_clean = np.nan_to_num(
-                            log_likes,
-                            nan=self._log_zero_penalty,
-                            posinf=0,
-                            neginf=self._log_zero_penalty,
-                        )
-                        log_likes_clean[~mask_finite] = self._log_zero_penalty
-                        total_log_likelihoods[:, class_index] += log_likes_clean
-                    except ValueError as e:
-                        print(
-                            f"Warning: Scoring failed for col='{col}', label='{label}'."
-                            f" Error: {e}. Applying penalty."
-                        )  # Reduced verbosity
-                        total_log_likelihoods[:, class_index] += self._log_zero_penalty
-                else:
-                    total_log_likelihoods[:, class_index] += self._log_zero_penalty
-        # --- [End of likelihood calculation loop] ---
+                for class_idx, label in enumerate(self.normal_labels_):
+                    kde = self.kdes_[col_name].get(label)
 
-        # --- Calculate final metrics ---
+                    if kde is not None:
+                        log_likes_for_feature_class = np.full(n_instances, self._log_zero_penalty, dtype=float)
+                        finite_values_to_score = current_feature_values_reshaped[mask_finite_input]
+
+                        if finite_values_to_score.size > 0:
+                            # Assuming controlled environment, score_samples should work if KDE is valid and input is shaped correctly.
+                            # Errors here would indicate more fundamental issues than typically handled by try-except-pass.
+                            scored_finite_values = kde.score_samples(finite_values_to_score)
+                            scored_finite_values_clean = np.nan_to_num(
+                                scored_finite_values, nan=self._log_zero_penalty,
+                                posinf=self._log_zero_penalty, neginf=self._log_zero_penalty
+                            )
+                            log_likes_for_feature_class[mask_finite_input] = scored_finite_values_clean
+
+                        total_log_likelihoods[:, class_idx] += log_likes_for_feature_class
+                    else:  # KDE not available for this feature-class pair
+                        total_log_likelihoods[:, class_idx] += self._log_zero_penalty
+
+        # --- Prepare results DataFrame ---
         results_data = {}
-        # Add per-class log-likelihoods first
-        likelihood_cols_order = [
-            f"total_loglik_class_{lbl}" for lbl in self.normal_labels_
-        ]  # Define order
-        for i, lbl in enumerate(self.normal_labels_):
-            results_data[likelihood_cols_order[i]] = total_log_likelihoods[:, i]
+        if self.normal_labels_:  # Check if there are any labels
+            for i, lbl_col_name in enumerate(likelihood_col_names):
+                results_data[lbl_col_name] = total_log_likelihoods[:, i]
 
-        # Prepare cleaned likelihoods for stats (replace -inf with NaN)
-        logliks_for_stats = np.where(
-            np.isneginf(total_log_likelihoods), np.nan, total_log_likelihoods
-        )
+        # For stats, replace penalties with NaN to ignore them in nanmax/nanmean
+        logliks_for_stats = np.where(total_log_likelihoods <= (self._log_zero_penalty + 1e-9),
+                                     np.nan, total_log_likelihoods)
 
-        with np.errstate(all="ignore"):  # Suppress warnings for all-nan slices etc.
+        if n_classes == 0:  # Ensure logliks_for_stats is (N,0) if no classes
+            logliks_for_stats = np.empty((n_instances, 0))
 
-            # --- Max-based ---
-            max_log_likelihood = np.nanmax(
-                logliks_for_stats, axis=1
-            )  # nanmax ignores NaN
-            ood_score_neg_loglik = -max_log_likelihood
+        # --- Metric Calculations (Optimized with NumPy) ---
+        with np.errstate(invalid='ignore', divide='ignore'):  # Suppress warnings from all-NaN slices or log(0)
+            if n_classes > 0:
+                max_log_likelihood = np.nanmax(logliks_for_stats, axis=1)
+                mean_log_likelihood = np.nanmean(logliks_for_stats, axis=1)
+            else:
+                max_log_likelihood = np.full(n_instances, np.nan)
+                mean_log_likelihood = np.full(n_instances, np.nan)
+
+            max_log_likelihood = np.nan_to_num(max_log_likelihood, nan=self._log_zero_penalty)
+            mean_log_likelihood = np.nan_to_num(mean_log_likelihood, nan=self._log_zero_penalty)
             results_data["max_log_likelihood"] = max_log_likelihood
-            results_data["ood_score_neg_loglik"] = ood_score_neg_loglik
-
-            # --- Mean-based ---
-            mean_log_likelihood = np.nanmean(logliks_for_stats, axis=1)
-            ood_score_neg_mean_loglik = -mean_log_likelihood
             results_data["mean_log_likelihood"] = mean_log_likelihood
-            results_data["ood_score_neg_mean_loglik"] = ood_score_neg_mean_loglik
 
-            # --- Median-based (NEW) ---
-            median_log_likelihood = np.nanmedian(logliks_for_stats, axis=1)
-            ood_score_neg_median_loglik = -median_log_likelihood
-            results_data["median_log_likelihood"] = median_log_likelihood
-            results_data["ood_score_neg_median_loglik"] = ood_score_neg_median_loglik
+            ood_score_likelihood_difference = -(max_log_likelihood - mean_log_likelihood)
+            results_data["ood_score_likelihood_difference"] = ood_score_likelihood_difference
 
-            # --- Difference: Max vs Mean ---
-            loglik_diff_max_avg = max_log_likelihood - mean_log_likelihood
-            ood_score_likelihood_difference = -loglik_diff_max_avg
-            results_data["ood_score_likelihood_difference"] = (
-                ood_score_likelihood_difference
-            )
+            ood_score_gap = np.full(n_instances, 0.0)
+            if n_classes >= 2:
+                sorted_logliks = np.sort(logliks_for_stats, axis=1)
+                gap = sorted_logliks[:, -1] - sorted_logliks[:, -2]
+                ood_score_gap = np.nan_to_num(-gap, nan=0.0)  # OOD if gap small/negative; 0 if not computable
+            results_data["ood_score_gap"] = ood_score_gap
 
-            # --- Difference: Max vs Median (NEW) ---
-            loglik_diff_max_median = max_log_likelihood - median_log_likelihood
-            ood_score_median_difference = -loglik_diff_max_median
-            results_data["ood_score_median_difference"] = ood_score_median_difference
+            ood_score_entropy = np.full(n_instances, 0.0)  # Default to 0 entropy if no classes
+            if n_classes > 0:
+                # Mask rows where all likelihoods are effectively _log_zero_penalty
+                mask_meaningful_ll_rows = np.any(logliks_for_stats > (self._log_zero_penalty + 1e-9), axis=1)
 
-            # --- Standardized Difference: Max vs Mean (NEW) ---
-            std_dev_log_likelihood = np.nanstd(logliks_for_stats, axis=1, ddof=0)
-            # Handle cases with zero std dev (e.g., single class, or all likelihoods identical)
-            # Avoid division by zero/NaN; if std=0, the concept is less meaningful, assign 0? or NaN? Let's use NaN.
-            ood_score_std_max_mean_diff = np.full(n_instances, np.nan)
-            valid_std_mask = (
-                std_dev_log_likelihood > 1e-9
-            )  # Check for non-trivial std dev
-            if np.any(valid_std_mask):
-                ood_score_std_max_mean_diff[valid_std_mask] = (
-                    loglik_diff_max_avg[valid_std_mask]
-                    / std_dev_log_likelihood[valid_std_mask]
-                )
-            results_data["ood_score_std_max_mean_diff"] = ood_score_std_max_mean_diff
+                # Initialize probabilities to uniform for rows that are all penalties, or if n_classes=0
+                probabilities = np.full_like(total_log_likelihoods, 1.0 / n_classes if n_classes > 0 else 0.0)
 
-            # --- Softmax-based ---
-            probabilities = np.full_like(total_log_likelihoods, np.nan)
-            valid_rows_mask = np.any(np.isfinite(total_log_likelihoods), axis=1)
-            if np.any(valid_rows_mask):
-                probabilities[valid_rows_mask] = softmax(
-                    total_log_likelihoods[valid_rows_mask], axis=1
-                )
-            max_softmax_prob = np.nanmax(probabilities, axis=1)
-            max_softmax_prob[~valid_rows_mask] = np.nan  # Ensure consistency
-            ood_score_msp = 1.0 - max_softmax_prob
-            results_data["max_softmax_prob"] = max_softmax_prob
-            results_data["ood_score_msp"] = ood_score_msp
+                if np.any(mask_meaningful_ll_rows):
+                    meaningful_logliks = total_log_likelihoods[mask_meaningful_ll_rows, :]
+                    probabilities[mask_meaningful_ll_rows, :] = softmax(meaningful_logliks, axis=1)
 
-            # --- Mahalanobis Distance (Optional, NEW) ---
-            ood_score_mahalanobis = np.full(n_instances, np.nan)  # Initialize with NaN
+                # Add epsilon for log stability
+                log_probabilities = np.log(probabilities + 1e-30)
+                entropy_values = -np.sum(probabilities * log_probabilities, axis=1)
+
+                default_entropy_val = np.log(n_classes) if n_classes > 1 else 0.0  # Max entropy for uniform
+                ood_score_entropy = np.nan_to_num(entropy_values, nan=default_entropy_val)
+            results_data["ood_score_entropy"] = ood_score_entropy
+
+            ood_score_mahalanobis = np.full(n_instances, 0.0)  # Default to 0.0 (not OOD)
             if (
-                calculate_mahalanobis_score
-                and self.likelihood_mean_vector_ is not None
-                and self.likelihood_inv_covariance_ is not None
+                    calculate_mahalanobis_score and
+                    self.likelihood_mean_vector_ is not None and
+                    self.likelihood_inv_covariance_ is not None and
+                    n_classes > 0 and
+                    self.likelihood_mean_vector_.shape[0] == n_classes  # Ensure consistency
             ):
-                # Use the original likelihoods (not nan-replaced ones for stats)
-                # but maybe handle NaNs/Infs before calculating distance?
                 likelihood_vectors_clean = np.nan_to_num(
-                    total_log_likelihoods,
-                    nan=self._log_zero_penalty,  # Or impute with mean? Needs consideration.
-                    posinf=0,
-                    neginf=self._log_zero_penalty,
+                    total_log_likelihoods, nan=self._log_zero_penalty,
+                    posinf=self._log_zero_penalty, neginf=self._log_zero_penalty
                 )
+                if likelihood_vectors_clean.shape[1] == self.likelihood_mean_vector_.shape[0]:
+                    delta = likelihood_vectors_clean - self.likelihood_mean_vector_
+                    term1 = delta @ self.likelihood_inv_covariance_
+                    m_dist_sq = np.sum(term1 * delta, axis=1)
+                    ood_score_mahalanobis = np.maximum(m_dist_sq, 0)  # Ensure non-negativity
+                else:  # Should not happen if checks pass
+                    warnings.warn("Dimension mismatch for Mahalanobis calculation despite checks. Skipping.",
+                                  UserWarning)
 
-                delta = likelihood_vectors_clean - self.likelihood_mean_vector_
-                # Calculate squared Mahalanobis distance
-                # D^2 = delta @ inv_cov @ delta^T (element-wise for each row)
-                # Efficient calculation: sum( (delta @ inv_cov) * delta, axis=1)
-                term1 = delta @ self.likelihood_inv_covariance_
-                ood_score_mahalanobis = np.sum(term1 * delta, axis=1)
-            results_data["ood_score_mahalanobis"] = ood_score_mahalanobis
+            results_data["ood_score_mahalanobis"] = np.nan_to_num(ood_score_mahalanobis, nan=0.0)
 
-        # Create result DataFrame
         results_df = pl.DataFrame(results_data)
 
-        # Optional: Join results back to original inference_data index if needed
-        # return inference_data.hstack(results_df)
-        return results_df
+        # Ensure correct column order, selecting only columns present in results_df
+        ordered_cols_present = [col for col in all_output_cols if col in results_df.columns]
+        return results_df.select(ordered_cols_present)

@@ -1,6 +1,13 @@
 n=100
 Computing metrics on cifar10 dataset...
 FPR@95: 68.89, AUROC: 75.87 AUPR_IN: 75.09, AUPR_OUT: 73.79
+──────────────────────────────────────────────────────────────────────
+Performing inference on tin dataset...
+FPR@95: 57.28, AUROC: 81.15 AUPR_IN: 86.39, AUPR_OUT: 71.62
+──────────────────────────────────────────────────────────────────────
+Computing mean metrics...
+FPR@95: 63.08, AUROC: 78.51 AUPR_IN: 80.74, AUPR_OUT: 72.70
+──────────────────────────────────────────────────────────────────────
 
 n=50
 Computing metrics on cifar10 dataset...
