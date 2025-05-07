@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 
 from openood.postprocessors import BasePostprocessor
 from openood.utils.cc_kde import DimensionWiseKdeOOD
+from openood.utils.cc_kde_multi import DimensionWiseKdeOODMulti
 from openood.utils.col_div import ColumnarDistributionDivergence
 from openood.utils.cut_off import ScreeCutoffSelector
 from openood.utils.scanner import NetworkScanner
@@ -43,6 +44,7 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
         self.config = config
 
         self.dw_kde = DimensionWiseKdeOOD()
+        #self.dw_kde = DimensionWiseKdeOODMulti()
         self.reference_activations: polars.DataFrame | None = None
 
     def setup(self, net: nn.Module, id_loader_dict, ood_loader_dict):
@@ -50,7 +52,6 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
         scanner = NetworkScanner(net, target_layer_names=self.target_layer_names)
         scan, _ = scanner.predict(id_loader_dict["train"])
         scan.write_parquet("1_scan.parquet")
-        print(scan)
         self.reference_activations = scan
 
         discriminator = ColumnarDistributionDivergence(self.reference_activations)
