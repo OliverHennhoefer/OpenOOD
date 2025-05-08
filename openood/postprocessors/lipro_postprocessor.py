@@ -57,7 +57,7 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
 
         pp_data = scan.select(self.inference_layer_names)
         class_ll = self.dw_kde.transform(pp_data)
-        class_ll = class_ll['ood_metric4_variance_support_c_star'].to_list()  #also metric1
+        class_ll = class_ll['ood_metric5_robust_dissent_c_star'].to_list()  #also metric1
 
         all_labels = [
             batch["label"].cpu()

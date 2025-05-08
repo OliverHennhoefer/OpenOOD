@@ -73,7 +73,10 @@ if __name__ == "__main__":
             metrics = evaluator.eval_ood(fsood=False)
             print(metrics)
 
-            output_filename = f"./results/eval/{method}/{setup}_{method}_ckpt{chkpt_id}.txt"
+            suffix = ""
+            if method == "lipro":
+                suffix = f"_depth{evaluator.postprocessor.config['postprocessor']['first_n']}"
+            output_filename = f"./results/eval/{method}/{setup}_{method}_ckpt{chkpt_id}{suffix}.txt"
 
             try:
                 output_dir = os.path.dirname(output_filename)
