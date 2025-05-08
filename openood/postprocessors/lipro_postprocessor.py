@@ -8,29 +8,7 @@ from openood.postprocessors import BasePostprocessor
 from openood.utils.cc_kde import DimensionWiseKdeOOD
 from openood.utils.cc_kde_multi import DimensionWiseKdeOODMulti
 from openood.utils.col_div import ColumnarDistributionDivergence
-from openood.utils.cut_off import ScreeCutoffSelector
 from openood.utils.scanner import NetworkScanner
-
-import math
-
-def invert_values_scaled(data):
-  min_val = min(data)
-  max_val = max(data)
-  value_range = max_val - min_val
-
-  # Handle case where all elements are the same (range is zero)
-  # Check floats carefully
-  is_float = any(isinstance(x, float) for x in data)
-  if (is_float and math.isclose(value_range, 0.0)) or (not is_float and value_range == 0):
-      # Avoid division by zero. Scaled value is undefined.
-      # Conventionally, return the middle of the target scale (0.5 for 0-1).
-      return [0.5] * len(data)
-
-  # Calculate inverted scaled value: 1 - (x - min_val) / value_range
-  # Simplified algebraicly to: (max_val - x) / value_range
-  inverted_scaled_list = [(max_val - x) / value_range for x in data]
-  return inverted_scaled_list
-
 
 class LikelihoodProfilingPostprocessor(BasePostprocessor):
 
@@ -50,7 +28,7 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
     def setup(self, net: nn.Module, id_loader_dict, ood_loader_dict):
 
         scanner = NetworkScanner(net, target_layer_names=self.target_layer_names)
-        scan, _ = scanner.predict(id_loader_dict["train"])
+        scan, _ = scanner.predict(id_loader_dict["val"])
         scan.write_parquet("1_scan.parquet")
         self.reference_activations = scan
 
@@ -64,18 +42,10 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
 
         col_dis_discr.write_parquet('2_discr.parquet')
 
-        if "first_n" in self.config.get("postprocessor", {}):
-            select_first_n = self.config["postprocessor"]["first_n"]
-            print(f"Configured to take first {select_first_n} most discriminant columns.")
-        else:
-            selector = ScreeCutoffSelector(sensitivity=0.1)
-            select_first_n = selector.propose_cutoff(
-                col_dis_discr, value_col="average_divergence", method="kneedle"
-            )
-            print(f"Using ScreeCutoffSelector to take first {select_first_n} most discriminant columns.")
-
-        first_n_cols = col_dis_discr.head(select_first_n).select("column")
+        select_first_n = self.config["postprocessor"]["first_n"]
+        first_n_cols = col_dis_discr.sort("average_divergence", descending=True).head(select_first_n).select("column")
         self.inference_layer_names = first_n_cols.get_column("column").to_list()
+        print(f"\nPicking {self.inference_layer_names}")
 
         scan_subset = scan.select(self.inference_layer_names)
         scan_subset = scan_subset.with_columns(scan.get_column('label'))
@@ -87,7 +57,7 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
 
         pp_data = scan.select(self.inference_layer_names)
         class_ll = self.dw_kde.transform(pp_data)
-        class_ll = class_ll['ood_score_likelihood_difference'].to_list()
+        class_ll = class_ll['ood_metric4_variance_support_c_star'].to_list()  #also metric1
 
         all_labels = [
             batch["label"].cpu()

@@ -9,20 +9,17 @@ from openood.networks import ResNet18_32x32
 if __name__ == "__main__":
     freeze_support()
 
-    #for name, module in net.named_modules():
-    #    print(name, "->", module)
-
     methods = [
         #"ash",
-        "ebo",
+        #"ebo",
         #"knn",
         #"lipro"
-        "odin",
-        "react",
-        "she",
+        #"odin",
+        #"react",
+        #"she",
         #"temp_scaling",
-        "gen",
-        "gram",
+        #"gen",
+        #"gram",
         "rmds",
         "mds_ensemble",
         #"cutpaste",
@@ -44,9 +41,11 @@ if __name__ == "__main__":
         # opengan"
     ]
 
-    setup = "cifar100"
-    chkpt = "cifar100_resnet18_32x32_base_e100_lr0.1_default"
-    num_c = 100
+    methods = ["lipro"]
+
+    setup = "cifar10"
+    chkpt = "cifar10_resnet18_32x32_base_e100_lr0.1_default"
+    num_c = 10
 
     for method in methods:
 
