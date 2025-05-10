@@ -2,7 +2,7 @@ import numpy as np
 import polars as pl
 import polars.selectors as cs
 
-from tqdm import tqdm  # Or from tqdm.auto import tqdm for better notebook compatibility
+from tqdm import tqdm
 from scipy.special import softmax
 from sklearn.neighbors import KernelDensity
 from typing import Literal, List, Dict, Optional, Any
@@ -10,8 +10,6 @@ import warnings
 
 from joblib import Parallel, delayed
 
-
-# import joblib # For version check or other utilities if needed
 
 
 class DimensionWiseKdeOODMulti:
