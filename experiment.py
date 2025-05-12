@@ -20,32 +20,32 @@ if __name__ == "__main__":
         #"temp_scaling",
         #"gen",
         #"gram",
-        "rmds",
-        "mds_ensemble",
-        #"cutpaste",
-        #"draem",
-        #"dropout",
+        #"rmds",
+        #"mds",
+        #"mds_ensemble",
         #"fdbd",
         #"godin",
-        "gradnorm",
+        #"gradnorm",
         #"iodin",
         #"kdad",
-        "mls",
+        #"mls",
         #"mcd",
         #"vim"
-        #"klm"
-        "mds",
-        #"dice"
-        "rankfeat"
+        #"klm",
+        #"mds",
+        "dice",
+        "openmax",
+        "rmds"
+        #"rankfeat"
         #"msp"
         # opengan"
     ]
 
-    methods = ["lipro"]
+    methods = ["likelihood"]
 
-    setup = "cifar10"
-    chkpt = "cifar10_resnet18_32x32_base_e100_lr0.1_default"
-    num_c = 10
+    setup = "cifar100"
+    chkpt = "cifar100_resnet18_32x32_base_e100_lr0.1_default"
+    num_c = 100
 
     for method in methods:
 

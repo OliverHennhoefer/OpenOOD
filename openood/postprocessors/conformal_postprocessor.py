@@ -2,8 +2,6 @@ from typing import Any
 
 import torch
 from torch import nn
-# optim is not needed anymore for this specific conformal approach
-# from torch import optim
 from tqdm import tqdm
 
 from .base_postprocessor import BasePostprocessor

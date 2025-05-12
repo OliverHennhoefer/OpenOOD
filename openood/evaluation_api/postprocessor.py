@@ -48,8 +48,9 @@ from openood.postprocessors import (
     IODINPostprocessor,
     NCIPostprocessor,
     LikelihoodProfilingPostprocessor,
+    ConformalCalibrationPostprocessor,
+    LikelihoodPostprocessor
 )
-from openood.postprocessors.conformal_postprocessor import ConformalCalibrationPostprocessor
 
 from openood.utils.config import Config, merge_configs
 
@@ -101,7 +102,8 @@ postprocessors = {
     "t2fnorm": T2FNormPostprocessor,
     "reweightood": ReweightOODPostprocessor,
     "lipro": LikelihoodProfilingPostprocessor,
-    "conformal": ConformalCalibrationPostprocessor
+    "conformal": ConformalCalibrationPostprocessor,
+    "likelihood": LikelihoodPostprocessor
 }
 
 link_prefix = "https://raw.githubusercontent.com/OliverHennhofer/OpenOOD/main/configs/postprocessors/"

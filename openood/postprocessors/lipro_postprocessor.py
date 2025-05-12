@@ -8,6 +8,7 @@ from openood.postprocessors import BasePostprocessor
 from openood.utils.cc_kde import DimensionWiseKdeOOD
 from openood.utils.cc_kde_multi import DimensionWiseKdeOODMulti
 from openood.utils.col_div import ColumnarDistributionDivergence
+from openood.utils.sampling import stratified_subset_dataloader
 from openood.utils.scanner import NetworkScanner
 
 class LikelihoodProfilingPostprocessor(BasePostprocessor):
@@ -21,14 +22,15 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
         self.APS_mode: bool = False
         self.config = config
 
-        self.dw_kde = DimensionWiseKdeOOD()
-        #self.dw_kde = DimensionWiseKdeOODMulti()
+        #self.dw_kde = DimensionWiseKdeOOD()
+        self.dw_kde = DimensionWiseKdeOODMulti()
         self.reference_activations: polars.DataFrame | None = None
 
     def setup(self, net: nn.Module, id_loader_dict, ood_loader_dict):
 
+        id_loader_dict["train"] = stratified_subset_dataloader(id_loader_dict["train"], 100, 1)
         scanner = NetworkScanner(net, target_layer_names=self.target_layer_names)
-        scan, _ = scanner.predict(id_loader_dict["val"])
+        scan, _ = scanner.predict(id_loader_dict["train"])  # val
         scan.write_parquet("1_scan.parquet")
         self.reference_activations = scan
 
@@ -56,8 +58,8 @@ class LikelihoodProfilingPostprocessor(BasePostprocessor):
         scan, output = scanner.predict(data_loader)
 
         pp_data = scan.select(self.inference_layer_names)
-        class_ll = self.dw_kde.transform(pp_data)
-        class_ll = class_ll['ood_metric5_robust_dissent_c_star'].to_list()  #also metric1
+        class_ll = self.dw_kde.transform(pp_data, metrics_to_compute=['ood_metric5_robust_dissent_c_star'])  # ood_metric5_robust_dissent_c_star
+        class_ll = class_ll['ood_metric5_robust_dissent_c_star'].to_list()  #ood_metric5_robust_dissent_c_star
 
         all_labels = [
             batch["label"].cpu()
